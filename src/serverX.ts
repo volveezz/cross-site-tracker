@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 
-const SITE_A_URL = process.env.SITE_A_URL || "http://localhost:3000";
+const SITE_A_URL = (process.env.SITE_A_URL || "http://localhost:3000").replace(/\/$/, "");
 
 const app = new Hono();
 

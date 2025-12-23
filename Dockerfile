@@ -14,6 +14,5 @@ COPY . .
 ENV NODE_ENV=production
 
 EXPOSE 3000
-EXPOSE 3001
 
-CMD ["sh", "-c", "bun run src/serverA.ts & bun run src/serverX.ts"]
+CMD ["bun", "run", "src/devA.ts"]
