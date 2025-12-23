@@ -5,7 +5,7 @@ const SITE_A_URL = process.env.SITE_A_URL || "http://localhost:3000";
 
 const app = new Hono();
 
-const storageScript = html`
+const storageScript = `
 <script>
   const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup'];
 
@@ -104,7 +104,7 @@ const layout = (content: string, scripts: string = "") => `
   </style>
 </head>
 <body>
-  ${storageScript.toString()}
+  ${storageScript}
   ${content}
   ${scripts}
 </body>
@@ -413,7 +413,7 @@ app.get("/embed", (c) => {
   </style>
 </head>
 <body>
-  ${raw(storageScript.toString())}
+  ${raw(storageScript)}
   <h3>Game (embedded in iframe)</h3>
 
   <div id="access-status" class="status pending">Checking storage access...</div>
