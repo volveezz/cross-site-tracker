@@ -516,7 +516,9 @@ app.get("/check", (c) => {
 	});
 });
 
-export default {
+export default app;
+
+export const server = {
 	port: 3001,
 	fetch: app.fetch.bind(app),
 };

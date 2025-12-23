@@ -197,7 +197,9 @@ app.get("/", (c) => {
 	return c.html(page);
 });
 
-export default {
+export default app;
+
+export const server = {
 	port: 3000,
 	fetch: app.fetch.bind(app),
 };
