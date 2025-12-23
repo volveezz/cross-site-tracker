@@ -90,6 +90,30 @@ app.get("/", (c) => {
       <button onclick="runRedirectTrack()">Run</button>
       <div id="redirect-status" class="status pending">Not run</div>
     </div>
+
+    <div class="test" id="test-indexeddb">
+      <h3>IndexedDB (iframe)</h3>
+      <p>Load hidden iframe, write to IndexedDB via postMessage</p>
+      <button onclick="runIndexedDB()">Run</button>
+      <div id="indexeddb-status" class="status pending">Not run</div>
+      <div id="indexeddb-data" class="result-data" style="display:none"></div>
+    </div>
+
+    <div class="test" id="test-etag">
+      <h3>ETag Tracking</h3>
+      <p>Fetch image from Game, server sends unique ETag. Browser caches & sends back on next request</p>
+      <button onclick="runEtag()">Run</button>
+      <div id="etag-status" class="status pending">Not run</div>
+      <div id="etag-data" class="result-data" style="display:none"></div>
+    </div>
+
+    <div class="test" id="test-cacheimg">
+      <h3>Cache Image</h3>
+      <p>Load unique image URL, server logs it. On Game, check if same ID was seen</p>
+      <button onclick="runCacheImg()">Run</button>
+      <div id="cacheimg-status" class="status pending">Not run</div>
+      <div id="cacheimg-data" class="result-data" style="display:none"></div>
+    </div>
   </div>
 
   <script>
@@ -244,10 +268,92 @@ app.get("/", (c) => {
       window.location.href = SITE_X + '/bounce?return=' + encodeURIComponent(window.location.href);
     }
 
+    function runIndexedDB() {
+      return new Promise((resolve) => {
+        setStatus('indexeddb', 'running', 'Loading iframe...');
+        const iframe = document.createElement('iframe');
+        iframe.src = SITE_X + '/ping-idb';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const timeout = setTimeout(() => {
+          setStatus('indexeddb', 'failed', 'Timeout - no response');
+          resolve({ success: false, error: 'timeout' });
+        }, 5000);
+
+        window.addEventListener('message', function handler(e) {
+          if (e.data && e.data.type === 'ping_idb_ready') {
+            setStatus('indexeddb', 'running', 'Sending flag...');
+            iframe.contentWindow.postMessage({ type: 'set_flag_idb', source: 'siteA' }, '*');
+          }
+          if (e.data && e.data.type === 'flag_idb_set') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('indexeddb', 'success', 'Flag written!', e.data);
+            iframe.remove();
+            resolve({ success: true, data: e.data });
+          }
+          if (e.data && e.data.type === 'flag_idb_error') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('indexeddb', 'failed', 'Storage blocked', e.data);
+            iframe.remove();
+            resolve({ success: false, error: e.data.error });
+          }
+        });
+      });
+    }
+
+    async function runEtag() {
+      setStatus('etag', 'running', 'Fetching pixel with ETag...');
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const loadPromise = new Promise((resolve, reject) => {
+          img.onload = () => resolve(true);
+          img.onerror = () => reject(new Error('Image load failed'));
+        });
+        img.src = SITE_X + '/etag-pixel?t=' + Date.now();
+        await loadPromise;
+
+        const trackerId = 'etag_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        localStorage.setItem('test8_etag_id', trackerId);
+
+        setStatus('etag', 'success', 'Pixel loaded, ETag should be cached', { trackerId });
+      } catch (e) {
+        setStatus('etag', 'failed', 'Error: ' + e.message);
+      }
+    }
+
+    function runCacheImg() {
+      setStatus('cacheimg', 'running', 'Loading cached image...');
+      try {
+        let cacheId = localStorage.getItem('test9_cacheimg_id');
+        if (!cacheId) {
+          cacheId = 'cache_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+          localStorage.setItem('test9_cacheimg_id', cacheId);
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          setStatus('cacheimg', 'success', 'Image loaded and cached', { cacheId });
+        };
+        img.onerror = () => {
+          setStatus('cacheimg', 'failed', 'Image load failed');
+        };
+        img.src = SITE_X + '/cache-img/' + cacheId;
+      } catch (e) {
+        setStatus('cacheimg', 'failed', 'Error: ' + e.message);
+      }
+    }
+
     async function runAllTests() {
       await runIframe();
+      await runIndexedDB();
       await runPopup();
       await runCrossCookie();
+      await runEtag();
+      runCacheImg();
       runSAA();
     }
   </script>
