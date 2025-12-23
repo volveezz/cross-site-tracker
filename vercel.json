@@ -1,7 +1,4 @@
 {
-	"buildCommand": "bun install",
-	"outputDirectory": ".vercel/output",
-	"framework": null,
 	"rewrites": [
 		{ "source": "/(.*)", "destination": "/api" }
 	]
