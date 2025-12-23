@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
-import type { HtmlEscapedString } from "hono/utils/html";
 
 const SITE_A_URL = process.env.SITE_A_URL || "http://localhost:3000";
 
@@ -105,7 +104,7 @@ const layout = (content: string, scripts: string = "") => `
   </style>
 </head>
 <body>
-  ${storageScript}
+  ${storageScript.toString()}
   ${content}
   ${scripts}
 </body>
@@ -414,7 +413,7 @@ app.get("/embed", (c) => {
   </style>
 </head>
 <body>
-  ${storageScript}
+  ${raw(storageScript.toString())}
   <h3>Game (embedded in iframe)</h3>
 
   <div id="access-status" class="status pending">Checking storage access...</div>
