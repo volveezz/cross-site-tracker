@@ -75,6 +75,21 @@ app.get("/", (c) => {
         <iframe id="sitex-iframe" style="width:100%; height:300px; border:none;"></iframe>
       </div>
     </div>
+
+    <div class="test" id="test-crosscookie">
+      <h3>Cross-Origin Cookie</h3>
+      <p>Fetch request to Game with credentials, server sets cookie via Set-Cookie header</p>
+      <button onclick="runCrossCookie()">Run</button>
+      <div id="crosscookie-status" class="status pending">Not run</div>
+      <div id="crosscookie-data" class="result-data" style="display:none"></div>
+    </div>
+
+    <div class="test" id="test-redirect">
+      <h3>Redirect Bounce</h3>
+      <p>Redirect to Game, write to first-party storage, redirect back (visible, but works in Safari)</p>
+      <button onclick="runRedirectTrack()">Run</button>
+      <div id="redirect-status" class="status pending">Not run</div>
+    </div>
   </div>
 
   <script>
@@ -133,41 +148,67 @@ app.get("/", (c) => {
       window.location.href = SITE_X + '?via=windowname';
     }
 
+    let popupResolve = null;
+    let popupTimeout = null;
+    let popupWindow = null;
+
+    function handlePopupMessage(e) {
+      if (e.data && e.data.type === 'receiver_ready') {
+        setStatus('popup', 'running', 'Sending flag...');
+        popupWindow.postMessage({ type: 'set_flag', source: 'siteA' }, '*');
+      }
+      if (e.data && e.data.type === 'flag_set') {
+        clearTimeout(popupTimeout);
+        window.removeEventListener('message', handlePopupMessage);
+        setStatus('popup', 'success', 'Flag written!', e.data);
+        popupWindow.close();
+        if (popupResolve) popupResolve({ success: true, data: e.data });
+      }
+      if (e.data && e.data.type === 'flag_error') {
+        clearTimeout(popupTimeout);
+        window.removeEventListener('message', handlePopupMessage);
+        setStatus('popup', 'failed', 'Storage blocked', e.data);
+        popupWindow.close();
+        if (popupResolve) popupResolve({ success: false, error: e.data.error });
+      }
+    }
+
+    function openPopupWithGesture() {
+      popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300');
+      if (popupWindow) {
+        setStatus('popup', 'running', 'Popup opened, waiting...');
+        window.addEventListener('message', handlePopupMessage);
+        popupTimeout = setTimeout(() => {
+          setStatus('popup', 'failed', 'Timeout');
+          if (popupResolve) popupResolve({ success: false, error: 'timeout' });
+        }, 10000);
+      }
+    }
+
     function runPopup() {
       return new Promise((resolve) => {
+        popupResolve = resolve;
         setStatus('popup', 'running', 'Opening popup...');
-        const popup = window.open(SITE_X + '/receiver', 'siteX', 'width=600,height=400');
-        if (!popup) {
-          setStatus('popup', 'failed', 'Popup blocked');
-          resolve({ success: false, error: 'popup_blocked' });
+        popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300');
+
+        if (!popupWindow || popupWindow.closed) {
+          const btn = document.createElement('button');
+          btn.textContent = 'Click to open popup (blocked by browser)';
+          btn.style.marginTop = '8px';
+          btn.onclick = () => {
+            openPopupWithGesture();
+            btn.remove();
+          };
+          document.getElementById('popup-status').after(btn);
+          setStatus('popup', 'failed', 'Popup blocked - click button below');
           return;
         }
 
-        const timeout = setTimeout(() => {
+        window.addEventListener('message', handlePopupMessage);
+        popupTimeout = setTimeout(() => {
           setStatus('popup', 'failed', 'Timeout');
           resolve({ success: false, error: 'timeout' });
         }, 10000);
-
-        window.addEventListener('message', function handler(e) {
-          if (e.data && e.data.type === 'receiver_ready') {
-            setStatus('popup', 'running', 'Sending flag...');
-            popup.postMessage({ type: 'set_flag', source: 'siteA' }, '*');
-          }
-          if (e.data && e.data.type === 'flag_set') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            setStatus('popup', 'success', 'Flag written!', e.data);
-            popup.close();
-            resolve({ success: true, data: e.data });
-          }
-          if (e.data && e.data.type === 'flag_error') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            setStatus('popup', 'failed', 'Storage blocked', e.data);
-            popup.close();
-            resolve({ success: false, error: e.data.error });
-          }
-        });
       });
     }
 
@@ -185,9 +226,28 @@ app.get("/", (c) => {
       });
     }
 
+    async function runCrossCookie() {
+      setStatus('crosscookie', 'running', 'Sending fetch request...');
+      try {
+        const res = await fetch(SITE_X + '/track', {
+          credentials: 'include'
+        });
+        const data = await res.json();
+        setStatus('crosscookie', 'success', 'Request sent, cookie may be set', data);
+      } catch (e) {
+        setStatus('crosscookie', 'failed', 'Request failed: ' + e.message);
+      }
+    }
+
+    function runRedirectTrack() {
+      setStatus('redirect', 'running', 'Redirecting to Game...');
+      window.location.href = SITE_X + '/bounce?return=' + encodeURIComponent(window.location.href);
+    }
+
     async function runAllTests() {
       await runIframe();
       await runPopup();
+      await runCrossCookie();
       runSAA();
     }
   </script>

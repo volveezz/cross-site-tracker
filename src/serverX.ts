@@ -7,7 +7,7 @@ const app = new Hono();
 
 const storageScript = `
 <script>
-  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup'];
+  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect'];
 
   function setCookie(name, value) {
     document.cookie = name + '=' + value + '; SameSite=None; Secure; path=/; max-age=31536000';
@@ -158,6 +158,22 @@ app.get("/", (c) => {
           <span id="saa-badge" class="badge badge-pending">N/A (not in iframe)</span>
         </div>
       </div>
+
+      <div class="test">
+        <div class="test-header">
+          <span class="test-name">Cross-Origin Cookie</span>
+          <span id="crosscookie-badge" class="badge badge-pending">checking</span>
+        </div>
+        <div id="crosscookie-data" class="data" style="display:none"></div>
+      </div>
+
+      <div class="test">
+        <div class="test-header">
+          <span class="test-name">Redirect Bounce</span>
+          <span id="redirect-badge" class="badge badge-pending">checking</span>
+        </div>
+        <div id="redirect-data" class="data" style="display:none"></div>
+      </div>
     </div>
 
     <div class="saa-section">
@@ -254,6 +270,34 @@ app.get("/", (c) => {
         return false;
       }
 
+      function checkCrossCookie() {
+        const flags = readFlag('test5_crosscookie');
+        if (flags.cookie) {
+          results.crosscookie = { success: true, method: 'cross_origin_cookie', ...flags };
+          setBadge('crosscookie', 'data', 'HAS DATA');
+          setData('crosscookie', results.crosscookie);
+          return true;
+        }
+        results.crosscookie = { success: false, ...flags };
+        setBadge('crosscookie', 'failed', 'no data');
+        setData('crosscookie', results.crosscookie);
+        return false;
+      }
+
+      function checkRedirect() {
+        const flags = readFlag('test6_redirect');
+        if (flags.localStorage || flags.cookie) {
+          results.redirect = { success: true, method: 'redirect_bounce', ...flags };
+          setBadge('redirect', 'data', 'HAS DATA');
+          setData('redirect', results.redirect);
+          return true;
+        }
+        results.redirect = { success: false, ...flags };
+        setBadge('redirect', 'failed', 'no data');
+        setData('redirect', results.redirect);
+        return false;
+      }
+
       async function testStorageAccess() {
         const resultEl = document.getElementById('saa-result');
 
@@ -309,6 +353,8 @@ app.get("/", (c) => {
       checkIframe();
       checkWindowName();
       checkPopup();
+      checkCrossCookie();
+      checkRedirect();
       checkSAA();
       updateDetection();
 
@@ -514,6 +560,70 @@ app.get("/check", (c) => {
 	return c.json({
 		info: "Check storage via browser - this endpoint cannot read client storage",
 	});
+});
+
+app.get("/track", (c) => {
+	const origin = c.req.header("Origin") || SITE_A_URL;
+	const timestamp = new Date().toISOString();
+
+	return new Response(JSON.stringify({ success: true, timestamp }), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": origin,
+			"Access-Control-Allow-Credentials": "true",
+			"Set-Cookie": `test5_crosscookie=${timestamp}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
+		},
+	});
+});
+
+app.options("/track", (c) => {
+	const origin = c.req.header("Origin") || SITE_A_URL;
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": origin,
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, OPTIONS",
+			"Access-Control-Allow-Headers": "Content-Type",
+		},
+	});
+});
+
+app.get("/bounce", (c) => {
+	const returnUrl = c.req.query("return") || SITE_A_URL;
+	const timestamp = new Date().toISOString();
+
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting...</title>
+  <style>
+    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div>Writing tracking data and redirecting back...</div>
+  <script>
+    const timestamp = '${timestamp}';
+    const returnUrl = '${returnUrl}';
+
+    try {
+      localStorage.setItem('test6_redirect', timestamp);
+    } catch (e) {}
+
+    try {
+      document.cookie = 'test6_redirect=' + timestamp + '; SameSite=Lax; Secure; path=/; max-age=31536000';
+    } catch (e) {}
+
+    setTimeout(() => {
+      window.location.href = returnUrl;
+    }, 100);
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
 });
 
 export default app;
