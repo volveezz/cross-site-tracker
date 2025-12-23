@@ -626,6 +626,48 @@ app.get("/bounce", (c) => {
 	return c.html(page.toString());
 });
 
+app.get("/windowname-bounce", (c) => {
+	const returnUrl = c.req.query("return") || SITE_A_URL;
+	const timestamp = new Date().toISOString();
+
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting...</title>
+  <style>
+    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div>Checking window.name and redirecting back...</div>
+  <script>
+    const timestamp = '${timestamp}';
+    const returnUrl = '${returnUrl}';
+
+    if (window.name && window.name.startsWith('visited_siteA')) {
+      try {
+        localStorage.setItem('test3_windowname', timestamp);
+      } catch (e) {}
+
+      try {
+        document.cookie = 'test3_windowname=' + timestamp + '; SameSite=Lax; Secure; path=/; max-age=31536000';
+      } catch (e) {}
+
+      window.name = '';
+    }
+
+    setTimeout(() => {
+      window.location.href = returnUrl;
+    }, 100);
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
 export default app;
 
 export const server = {

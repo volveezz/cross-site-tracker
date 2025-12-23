@@ -145,7 +145,7 @@ app.get("/", (c) => {
     function runWindowName() {
       setStatus('windowname', 'running', 'Redirecting...');
       window.name = 'visited_siteA_' + Date.now();
-      window.location.href = SITE_X + '?via=windowname';
+      window.location.href = SITE_X + '/windowname-bounce?return=' + encodeURIComponent(window.location.href);
     }
 
     let popupResolve = null;
