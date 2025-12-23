@@ -194,7 +194,7 @@ app.get("/", (c) => {
 </body>
 </html>
 `;
-	return c.html(page);
+	return c.html(page as unknown as string);
 });
 
 export default app;

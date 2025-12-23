@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
+import type { HtmlEscapedString } from "hono/utils/html";
 
 const SITE_A_URL = process.env.SITE_A_URL || "http://localhost:3000";
 
@@ -74,7 +75,7 @@ const storageScript = html`
 </script>
 `;
 
-const layout = (content: string, scripts: string = "") => html`
+const layout = (content: HtmlEscapedString, scripts: HtmlEscapedString | string = "") => html`
 <!DOCTYPE html>
 <html>
 <head>
@@ -316,7 +317,7 @@ app.get("/", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts));
+	return c.html(layout(content, scripts) as unknown as string);
 });
 
 app.get("/ping", (c) => {
@@ -351,7 +352,7 @@ app.get("/ping", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts));
+	return c.html(layout(content, scripts) as unknown as string);
 });
 
 app.get("/receiver", (c) => {
@@ -390,7 +391,7 @@ app.get("/receiver", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts));
+	return c.html(layout(content, scripts) as unknown as string);
 });
 
 app.get("/embed", (c) => {
@@ -507,7 +508,7 @@ app.get("/embed", (c) => {
 </body>
 </html>
 `;
-	return c.html(page);
+	return c.html(page as unknown as string);
 });
 
 app.get("/check", (c) => {
