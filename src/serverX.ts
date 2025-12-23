@@ -75,7 +75,7 @@ const storageScript = html`
 </script>
 `;
 
-const layout = (content: HtmlEscapedString, scripts: HtmlEscapedString | string = "") => html`
+const layout = (content: string, scripts: string = "") => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -317,7 +317,7 @@ app.get("/", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts) as unknown as string);
+	return c.html(layout(content.toString(), scripts.toString()));
 });
 
 app.get("/ping", (c) => {
@@ -352,7 +352,7 @@ app.get("/ping", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts) as unknown as string);
+	return c.html(layout(content.toString(), scripts.toString()));
 });
 
 app.get("/receiver", (c) => {
@@ -391,7 +391,7 @@ app.get("/receiver", (c) => {
     </script>
   `;
 
-	return c.html(layout(content, scripts) as unknown as string);
+	return c.html(layout(content.toString(), scripts.toString()));
 });
 
 app.get("/embed", (c) => {
@@ -508,7 +508,7 @@ app.get("/embed", (c) => {
 </body>
 </html>
 `;
-	return c.html(page as unknown as string);
+	return c.html(page.toString());
 });
 
 app.get("/check", (c) => {
