@@ -9,7 +9,8 @@
 		"start:x": "bun run src/devX.ts"
 	},
 	"devDependencies": {
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"@vercel/node": "^5.5.16"
 	},
 	"peerDependencies": {
 		"typescript": "^5"

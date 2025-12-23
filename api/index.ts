@@ -4,7 +4,8 @@ import appX from "../src/serverX";
 
 const mode = process.env.SERVER_MODE || "a";
 const app = mode === "x" ? appX : appA;
+const handler = handle(app);
 
-export const GET = handle(app);
-export const POST = handle(app);
-export default handle(app);
+export const GET = handler;
+export const POST = handler;
+export default handler;
