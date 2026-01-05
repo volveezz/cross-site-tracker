@@ -208,6 +208,307 @@ app.get("/pixel", (c) => {
 	});
 });
 
+app.get("/ping", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>Tracker Ping</title></head>
+<body>
+<script>
+  const STORAGE_KEY = '${STORAGE_KEY}';
+
+  function writeFlag(source) {
+    const timestamp = new Date().toISOString();
+    try {
+      const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      visits.push({ source, timestamp, method: 'iframe' });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+      return { success: true, timestamp };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'ping_ready' }, '*');
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'set_flag') {
+      const result = writeFlag(e.data.source || 'unknown');
+      if (result.success) {
+        window.parent.postMessage({ type: 'flag_set', ...result }, '*');
+      } else {
+        window.parent.postMessage({ type: 'flag_error', error: result.error }, '*');
+      }
+    }
+  });
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/receiver", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>Tracker Receiver</title></head>
+<body>
+<script>
+  const STORAGE_KEY = '${STORAGE_KEY}';
+
+  function writeFlag(source) {
+    const timestamp = new Date().toISOString();
+    try {
+      const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      visits.push({ source, timestamp, method: 'popup' });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+      return { success: true, timestamp };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  if (window.opener) {
+    window.opener.postMessage({ type: 'receiver_ready' }, '*');
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'set_flag') {
+      const result = writeFlag(e.data.source || 'unknown');
+      if (result.success) {
+        window.opener.postMessage({ type: 'flag_set', ...result }, '*');
+      } else {
+        window.opener.postMessage({ type: 'flag_error', error: result.error }, '*');
+      }
+    }
+  });
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/windowname-bounce", (c) => {
+	const returnUrl = c.req.query("return") || "/";
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>Redirecting...</title></head>
+<body>
+<script>
+  const STORAGE_KEY = '${STORAGE_KEY}';
+  const windowName = window.name;
+
+  if (windowName) {
+    try {
+      const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      visits.push({ source: 'windowname', timestamp: new Date().toISOString(), windowName, method: 'windowname' });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+    } catch (e) {}
+  }
+
+  window.location.href = '${returnUrl}';
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/bounce", (c) => {
+	const returnUrl = c.req.query("return") || "/";
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>Redirecting...</title></head>
+<body>
+<script>
+  const STORAGE_KEY = '${STORAGE_KEY}';
+
+  try {
+    const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    visits.push({ source: 'redirect', timestamp: new Date().toISOString(), method: 'redirect' });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+  } catch (e) {}
+
+  window.location.href = '${returnUrl}';
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/embed", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tracker Embed</title>
+  <style>
+    body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
+    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #7c4dff; color: white; border: none; width: 100%; }
+    .status { padding: 12px; margin-top: 12px; }
+    .success { background: #0a2f0a; color: #4caf50; }
+    .pending { background: #222; color: #888; }
+  </style>
+</head>
+<body>
+  <button class="btn" onclick="requestAccess()">Grant Storage Access</button>
+  <div id="status" class="status pending">Click button to grant access</div>
+
+  <script>
+    const STORAGE_KEY = '${STORAGE_KEY}';
+
+    async function requestAccess() {
+      const statusEl = document.getElementById('status');
+
+      if (!document.requestStorageAccess) {
+        statusEl.textContent = 'Storage Access API not supported';
+        window.parent.postMessage({ type: 'storage_access_result', success: false, message: 'API not supported' }, '*');
+        return;
+      }
+
+      try {
+        await document.requestStorageAccess();
+
+        const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        visits.push({ source: 'saa', timestamp: new Date().toISOString(), method: 'saa' });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+
+        statusEl.className = 'status success';
+        statusEl.textContent = 'Access granted, visit recorded!';
+        window.parent.postMessage({ type: 'storage_access_result', success: true }, '*');
+      } catch (e) {
+        statusEl.textContent = 'Denied: ' + e.message;
+        window.parent.postMessage({ type: 'storage_access_result', success: false, message: e.message }, '*');
+      }
+    }
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/track", (c) => {
+	return new Response(JSON.stringify({ success: true }), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+			"Set-Cookie": `tracker_cookie=${Date.now()}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
+		},
+	});
+});
+
+app.options("/track", (c) => {
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+		},
+	});
+});
+
+app.get("/track-verify", (c) => {
+	const cookie = c.req.header("Cookie") || "";
+	const hasCookie = cookie.includes("tracker_cookie");
+	return new Response(JSON.stringify({ cookieReceived: hasCookie, cookie }), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+		},
+	});
+});
+
+app.options("/track-verify", (c) => {
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, OPTIONS",
+		},
+	});
+});
+
+app.get("/fingerprint-receiver", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>Fingerprint Receiver</title></head>
+<body>
+<script>
+  const FP_KEY = '${FP_KEY}';
+
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'fp_ready' }, '*');
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'store_fp' && e.data.hash) {
+      try {
+        const fps = JSON.parse(localStorage.getItem(FP_KEY) || '[]');
+        if (!fps.includes(e.data.hash)) {
+          fps.push(e.data.hash);
+          localStorage.setItem(FP_KEY, JSON.stringify(fps));
+        }
+        window.parent.postMessage({ type: 'fp_stored', hash: e.data.hash }, '*');
+      } catch (e) {
+        window.parent.postMessage({ type: 'fp_error', error: e.message }, '*');
+      }
+    }
+  });
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/sw-register", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>SW Register</title></head>
+<body>
+<script>
+  const STORAGE_KEY = '${STORAGE_KEY}';
+
+  async function registerSW() {
+    try {
+      if (!('serviceWorker' in navigator)) {
+        throw new Error('Service Worker not supported');
+      }
+
+      const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      visits.push({ source: 'sw', timestamp: new Date().toISOString(), method: 'serviceworker' });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'sw_flag_set', success: true }, '*');
+      }
+    } catch (e) {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'sw_error', error: e.message }, '*');
+      }
+    }
+  }
+
+  registerSW();
+</script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
 export default app;
 
 export const server = {
