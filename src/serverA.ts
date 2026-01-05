@@ -75,11 +75,11 @@ app.get("/", (c) => {
 
     <div class="test" id="test-saa">
       <h3>Storage Access API</h3>
-      <p>Embed Game as iframe, test if it can access its storage</p>
+      <p>Load iframe, click button inside to grant access</p>
       <button onclick="runSAA()">Load iframe</button>
       <div id="saa-status" class="status pending">Not run</div>
-      <div id="saa-frame" style="display:none; margin-top:12px; border:1px solid #333; overflow:hidden;">
-        <iframe id="sitex-iframe" style="width:100%; height:300px; border:none;"></iframe>
+      <div id="saa-frame" style="display:none; margin-top:12px; border:1px solid #333;">
+        <iframe id="saa-iframe" style="width:100%; height:200px; border:none;"></iframe>
       </div>
     </div>
 
@@ -241,15 +241,19 @@ app.get("/", (c) => {
     }
 
     function runSAA() {
-      setStatus('saa', 'running', 'Loading iframe...');
+      setStatus('saa', 'running', 'Click "Grant Access" in iframe below');
       const frame = document.getElementById('saa-frame');
-      const iframe = document.getElementById('sitex-iframe');
+      const iframe = document.getElementById('saa-iframe');
       frame.style.display = 'block';
       iframe.src = SITE_X + '/embed';
 
       window.addEventListener('message', function handler(e) {
         if (e.data && e.data.type === 'storage_access_result') {
-          setStatus('saa', e.data.success ? 'success' : 'failed', e.data.message);
+          if (e.data.success) {
+            setStatus('saa', 'success', 'Flag written!');
+          } else {
+            setStatus('saa', 'failed', e.data.message || 'Failed');
+          }
         }
       });
     }
