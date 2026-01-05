@@ -267,13 +267,18 @@ app.get("/", (c) => {
     }
 
     async function runCrossCookie() {
-      setStatus('crosscookie', 'running', 'Sending fetch request...');
+      setStatus('crosscookie', 'running', 'Checking for existing cookie...');
       try {
-        const res = await fetch(SITE_X + '/track', {
-          credentials: 'include'
-        });
-        const data = await res.json();
-        setStatus('crosscookie', 'success', 'Request sent, cookie may be set', data);
+        const checkRes = await fetch(SITE_X + '/track-verify', { credentials: 'include' });
+        const checkData = await checkRes.json();
+
+        if (checkData.cookieReceived) {
+          setStatus('crosscookie', 'success', 'Cookie found from previous visit!', checkData);
+        } else {
+          setStatus('crosscookie', 'running', 'No cookie found, setting for next visit...');
+          await fetch(SITE_X + '/track', { credentials: 'include' });
+          setStatus('crosscookie', 'failed', 'No previous visit detected. Cookie set for future.', checkData);
+        }
       } catch (e) {
         setStatus('crosscookie', 'failed', 'Request failed: ' + e.message);
       }

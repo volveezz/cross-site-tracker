@@ -902,6 +902,34 @@ app.options("/track", (c) => {
 	});
 });
 
+app.get("/track-verify", (c) => {
+	const origin = c.req.header("Origin") || SITE_A_URL;
+	const cookie = c.req.header("Cookie") || "";
+	const hasTrackingCookie = cookie.includes("test5_crosscookie=");
+
+	return new Response(JSON.stringify({
+		cookieReceived: hasTrackingCookie,
+		rawCookie: cookie || null
+	}), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": origin,
+			"Access-Control-Allow-Credentials": "true",
+		},
+	});
+});
+
+app.options("/track-verify", (c) => {
+	const origin = c.req.header("Origin") || SITE_A_URL;
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": origin,
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, OPTIONS",
+		},
+	});
+});
+
 app.get("/bounce", (c) => {
 	const returnUrl = c.req.query("return") || SITE_A_URL;
 	const timestamp = new Date().toISOString();
