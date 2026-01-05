@@ -1,122 +1,9 @@
 import { Hono } from "hono";
-import { html, raw } from "hono/html";
+import { html } from "hono/html";
 
-const SITE_A_URL = (process.env.SITE_A_URL || "http://localhost:3000").replace(/\/$/, "");
 const TRACKER_URL = (process.env.TRACKER_URL || "http://localhost:3002").replace(/\/$/, "");
 
 const app = new Hono();
-
-const storageScript = `
-<script>
-  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test_saa', 'test10_serviceworker', 'test11_fingerprint'];
-
-  function setCookie(name, value) {
-    document.cookie = name + '=' + value + '; SameSite=None; Secure; path=/; max-age=31536000';
-  }
-
-  function getCookie(name) {
-    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-    return match ? match[2] : null;
-  }
-
-  function writeFlag(testKey) {
-    const timestamp = new Date().toISOString();
-    const results = { testKey, timestamp, localStorage: false, cookie: false, errors: [] };
-
-    try {
-      localStorage.setItem(testKey, timestamp);
-      results.localStorage = true;
-    } catch (e) {
-      results.errors.push('localStorage: ' + e.message);
-    }
-
-    try {
-      setCookie(testKey, timestamp);
-      results.cookie = true;
-    } catch (e) {
-      results.errors.push('cookie: ' + e.message);
-    }
-
-    return results;
-  }
-
-  function readFlag(testKey) {
-    const results = { testKey, localStorage: null, cookie: null, errors: [] };
-
-    try {
-      results.localStorage = localStorage.getItem(testKey);
-    } catch (e) {
-      results.errors.push('localStorage: ' + e.message);
-    }
-
-    try {
-      results.cookie = getCookie(testKey);
-    } catch (e) {
-      results.errors.push('cookie: ' + e.message);
-    }
-
-    return results;
-  }
-
-  function readAllFlags() {
-    const all = {};
-    for (const key of TESTS) {
-      all[key] = readFlag(key);
-    }
-    return all;
-  }
-
-  function clearAllFlags() {
-    for (const key of TESTS) {
-      try { localStorage.removeItem(key); } catch (e) {}
-      document.cookie = key + '=; path=/; max-age=0';
-    }
-  }
-</script>
-`;
-
-const layout = (content: string, scripts: string = "", title: string = "Casino") => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
-    h1 { color: #fff; }
-    .detection { padding: 20px; margin-bottom: 20px; }
-    .detected { background: #0a2f0a; border: 2px solid #4caf50; }
-    .not-detected { background: #2f0a0a; border: 2px solid #f44336; }
-    .tests { display: grid; gap: 12px; }
-    .test { padding: 12px; background: #111; border: 1px solid #333; }
-    .test-header { display: flex; justify-content: space-between; align-items: center; }
-    .test-name { font-weight: bold; color: #fff; }
-    .badge { padding: 4px 8px; font-size: 12px; }
-    .badge-success { background: #4caf50; color: #000; }
-    .badge-failed { background: #f44336; color: #fff; }
-    .badge-pending { background: #444; color: #888; }
-    .badge-data { background: #1a73e8; color: #fff; }
-    .data { font-family: monospace; font-size: 12px; background: #0a0a0a; padding: 8px; margin-top: 8px; border: 1px solid #222; color: #aaa; }
-    button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; }
-    button:hover { background: #333; }
-    a { color: #8ab4f8; }
-    .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
-    @media (max-width: 600px) {
-      body { margin: 20px auto; }
-      .test-header { flex-wrap: wrap; gap: 8px; }
-      button { padding: 12px 16px; margin-bottom: 8px; }
-      .data { font-size: 11px; word-break: break-all; }
-    }
-  </style>
-</head>
-<body>
-  ${storageScript}
-  ${content}
-  ${scripts}
-</body>
-</html>
-`;
 
 app.get("/", (c) => {
 	const page = html`
@@ -128,978 +15,118 @@ app.get("/", (c) => {
   <title>Casino</title>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
-    h1 { color: #fff; margin-bottom: 20px; }
+    h1 { color: #fff; }
     .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
-    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; }
-    .btn:hover { background: #1557b0; }
+    .detection { padding: 20px; margin-bottom: 20px; }
+    .detected { background: #0a2f0a; border: 2px solid #4caf50; }
+    .not-detected { background: #2f0a0a; border: 2px solid #f44336; }
+    .checking { background: #1a0a2e; border: 2px solid #4a1a7e; }
+    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #7c4dff; color: white; border: none; margin-right: 8px; }
+    .btn:hover { background: #651fff; }
+    .result { font-family: monospace; font-size: 12px; background: #0a0a0a; padding: 12px; margin-top: 12px; white-space: pre-wrap; border: 1px solid #222; color: #aaa; }
     a { color: #8ab4f8; }
-    .frame-container { margin-top: 20px; display: none; }
-    iframe { width: 100%; height: 70vh; border: 2px solid #333; background: #111; }
     @media (max-width: 600px) {
       body { margin: 20px auto; }
-      .btn { width: 100%; }
-      iframe { height: 60vh; }
+      .btn { width: 100%; margin-bottom: 8px; }
     }
   </style>
 </head>
 <body>
   <h1>Casino</h1>
   <div class="info">
-    <strong>Tracker:</strong> ${SITE_A_URL}<br>
-    <strong>Purpose:</strong> Detect if user visited Landing via embedded tests
+    <strong>Tracker:</strong> ${TRACKER_URL}<br>
+    <strong>Purpose:</strong> Detect if user visited any Landing site
   </div>
 
-  <button class="btn" onclick="loadTests()">Load Tracking Tests</button>
-  <a href="${SITE_A_URL}" style="margin-left: 16px;">Go to Landing</a>
-
-  <div id="frame-container" class="frame-container">
-    <iframe id="tests-frame"></iframe>
+  <div id="detection" class="detection checking">
+    <h2 id="detection-title">Check Tracker</h2>
+    <p id="detection-desc">Click button to check if you've been tracked</p>
   </div>
+
+  <button class="btn" onclick="checkTracker()">Check Tracker</button>
+  <button class="btn" onclick="location.reload()" style="background: #333;">Refresh</button>
+
+  <div id="result" class="result" style="display:none;"></div>
+
+  <p style="margin-top: 20px;"><a href="${TRACKER_URL}" target="_blank">Open Tracker to see stored data</a></p>
 
   <script>
-    function loadTests() {
-      const container = document.getElementById('frame-container');
-      const iframe = document.getElementById('tests-frame');
-      container.style.display = 'block';
-      iframe.src = '/tests' + window.location.search;
+    const TRACKER = '${TRACKER_URL}';
+
+    async function generateFingerprint() {
+      const components = [];
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('fingerprint', 2, 2);
+      components.push(canvas.toDataURL());
+
+      const gl = document.createElement('canvas').getContext('webgl');
+      if (gl) {
+        components.push(gl.getParameter(gl.VENDOR));
+        components.push(gl.getParameter(gl.RENDERER));
+      }
+
+      components.push(screen.width + 'x' + screen.height);
+      components.push(screen.colorDepth);
+      components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      components.push(navigator.language);
+      components.push(navigator.platform);
+
+      const data = components.join('|');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+      return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
     }
-  </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
 
-app.get("/tests", (c) => {
-	const via = c.req.query("via");
-
-	const content = html`
-    <h1>Casino - Tests</h1>
-    <div class="info">
-      <strong>Landing:</strong> ${SITE_A_URL}<br>
-      <strong>Tracker:</strong> ${TRACKER_URL}<br>
-      <strong>Context:</strong> <span id="context-info">checking...</span>
-    </div>
-
-    <div id="detection" class="detection not-detected">
-      <h2 id="detection-title">-</h2>
-      <p id="detection-desc"></p>
-    </div>
-
-    <h3>Test Results</h3>
-    <div class="tests">
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Iframe</span>
-          <span id="iframe-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="iframe-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">window.name</span>
-          <span id="windowname-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="windowname-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Popup</span>
-          <span id="popup-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="popup-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Storage Access API</span>
-          <span id="saa-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="saa-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Cross-Origin Cookie</span>
-          <span id="crosscookie-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="crosscookie-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Redirect Bounce</span>
-          <span id="redirect-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="redirect-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Service Worker</span>
-          <span id="sw-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="sw-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Fingerprint</span>
-          <span id="fingerprint-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="fingerprint-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test" style="background: #1a0a2e; border-color: #4a1a7e;">
-        <div class="test-header">
-          <span class="test-name">Central Tracker</span>
-          <span id="tracker-badge" class="badge badge-pending">-</span>
-        </div>
-        <div id="tracker-data" class="data" style="display:none"></div>
-        <button onclick="checkTracker()" style="margin-top: 8px;">Check Tracker</button>
-      </div>
-    </div>
-
-    <h3>Actions</h3>
-    <button onclick="location.reload()">Refresh</button>
-    <button onclick="clearAllFlags(); location.reload();">Clear All Storage</button>
-
-    <h3>Raw Storage Data</h3>
-    <div id="raw-data" class="data"></div>
-  `;
-
-	const scripts = html`
-    <script>
-      const urlVia = '${via || ""}';
-      const TRACKER = '${TRACKER_URL}';
-      const results = {};
-
-      document.getElementById('context-info').textContent = window.self === window.top ? 'Direct visit' : 'Embedded (third-party)';
-      let swDetected = false;
-      let swWorker = null;
-
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data && event.data.type === 'sw_active') {
-            swDetected = true;
-            swWorker = event.source;
-          }
-        });
-      }
-
-      function setBadge(testName, status, text) {
-        const badge = document.getElementById(testName + '-badge');
-        badge.className = 'badge badge-' + status;
-        badge.textContent = text;
-      }
-
-      function setData(testName, data) {
-        const dataEl = document.getElementById(testName + '-data');
-        if (dataEl && data) {
-          dataEl.style.display = 'block';
-          dataEl.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-        }
-      }
-
-      function checkIframe() {
-        const flags = readFlag('test2_iframe');
-        if (flags.localStorage || flags.cookie) {
-          results.iframe = { success: true, method: 'iframe', ...flags };
-          setBadge('iframe', 'data', 'HAS DATA');
-          setData('iframe', results.iframe);
-          return true;
-        }
-        results.iframe = { success: false, ...flags };
-        setBadge('iframe', 'failed', 'no data');
-        setData('iframe', results.iframe);
-        return false;
-      }
-
-      function checkWindowName() {
-        const flags = readFlag('test3_windowname');
-        if (flags.localStorage || flags.cookie) {
-          results.windowname = { success: true, method: 'window_name', ...flags };
-          setBadge('windowname', 'data', 'HAS DATA');
-          setData('windowname', results.windowname);
-          return true;
-        }
-        if (urlVia === 'windowname' && window.name && window.name.startsWith('visited_siteA')) {
-          const writeResult = writeFlag('test3_windowname');
-          results.windowname = { success: true, method: 'window_name', windowName: window.name, ...writeResult };
-          window.name = '';
-          setBadge('windowname', 'success', 'JUST WRITTEN');
-          setData('windowname', results.windowname);
-          return true;
-        }
-        results.windowname = { success: false, windowName: window.name || null };
-        setBadge('windowname', 'failed', window.name ? 'wrong value' : 'empty');
-        setData('windowname', results.windowname);
-        return false;
-      }
-
-      function checkPopup() {
-        const flags = readFlag('test4_popup');
-        if (flags.localStorage || flags.cookie) {
-          results.popup = { success: true, method: 'popup', ...flags };
-          setBadge('popup', 'data', 'HAS DATA');
-          setData('popup', results.popup);
-          return true;
-        }
-        results.popup = { success: false, ...flags };
-        setBadge('popup', 'failed', 'no data');
-        return false;
-      }
-
-      function checkSAA() {
-        const flags = readFlag('test_saa');
-        if (flags.localStorage || flags.cookie) {
-          results.saa = { success: true, ...flags };
-          setBadge('saa', 'data', 'HAS DATA');
-          setData('saa', results.saa);
-          return true;
-        }
-        results.saa = { success: false };
-        setBadge('saa', 'failed', 'no data');
-        return false;
-      }
-
-      function checkCrossCookie() {
-        const flags = readFlag('test5_crosscookie');
-        if (flags.cookie) {
-          results.crosscookie = { success: true, method: 'cross_origin_cookie', ...flags };
-          setBadge('crosscookie', 'data', 'HAS DATA');
-          setData('crosscookie', results.crosscookie);
-          return true;
-        }
-        results.crosscookie = { success: false, ...flags };
-        setBadge('crosscookie', 'failed', 'no data');
-        setData('crosscookie', results.crosscookie);
-        return false;
-      }
-
-      function checkRedirect() {
-        const flags = readFlag('test6_redirect');
-        if (flags.localStorage || flags.cookie) {
-          results.redirect = { success: true, method: 'redirect_bounce', ...flags };
-          setBadge('redirect', 'data', 'HAS DATA');
-          setData('redirect', results.redirect);
-          return true;
-        }
-        results.redirect = { success: false, ...flags };
-        setBadge('redirect', 'failed', 'no data');
-        setData('redirect', results.redirect);
-        return false;
-      }
-
-      async function querySWFlag(sw) {
-        const channel = new MessageChannel();
-        return new Promise((resolve) => {
-          channel.port1.onmessage = (event) => resolve(event.data);
-          sw.postMessage({ type: 'read_flag' }, [channel.port2]);
-          setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
-        });
-      }
-
-      async function checkServiceWorker() {
-        if (!('serviceWorker' in navigator)) {
-          results.sw = { success: false };
-          setBadge('sw', 'failed', 'no data');
-          return false;
-        }
-
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (!reg || !reg.active) {
-          results.sw = { success: false };
-          setBadge('sw', 'failed', 'no data');
-          return false;
-        }
-
-        const response = await querySWFlag(reg.active);
-        if (response.found) {
-          results.sw = { success: true, ...response.data };
-          setBadge('sw', 'data', 'HAS DATA');
-          setData('sw', results.sw);
-          return true;
-        }
-
-        results.sw = { success: false };
-        setBadge('sw', 'failed', 'no data');
-        return false;
-      }
-
-      async function generateFingerprint() {
-        const components = [];
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.textBaseline = 'top';
-        ctx.font = '14px Arial';
-        ctx.fillText('fingerprint', 2, 2);
-        components.push(canvas.toDataURL());
-
-        const gl = document.createElement('canvas').getContext('webgl');
-        if (gl) {
-          components.push(gl.getParameter(gl.VENDOR));
-          components.push(gl.getParameter(gl.RENDERER));
-        }
-
-        components.push(screen.width + 'x' + screen.height);
-        components.push(screen.colorDepth);
-        components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
-        components.push(navigator.language);
-        components.push(navigator.platform);
-
-        const data = components.join('|');
-        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
-        return Array.from(new Uint8Array(hashBuffer))
-          .map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-
-      async function checkFingerprint() {
+    function parseTrackerResult() {
+      const params = new URLSearchParams(window.location.search);
+      const result = params.get('tracker_result');
+      if (result) {
         try {
-          const currentFp = await generateFingerprint();
-          const stored = JSON.parse(localStorage.getItem('test11_fingerprint') || '[]');
-
-          if (stored.includes(currentFp)) {
-            results.fingerprint = { success: true, hash: currentFp };
-            setBadge('fingerprint', 'data', 'MATCH');
-            setData('fingerprint', results.fingerprint);
-            return true;
-          }
-
-          results.fingerprint = { success: false, hash: currentFp, storedCount: stored.length };
-          setBadge('fingerprint', 'failed', stored.length > 0 ? 'no match' : 'no data');
-          setData('fingerprint', results.fingerprint);
-          return false;
-        } catch (e) {
-          results.fingerprint = { success: false, error: e.message };
-          setBadge('fingerprint', 'failed', 'error');
-          setData('fingerprint', results.fingerprint);
-          return false;
-        }
+          const data = JSON.parse(result);
+          showResult(data);
+          history.replaceState({}, '', window.location.pathname);
+        } catch (e) {}
       }
+    }
 
-      function updateDetection() {
-        const allFlags = readAllFlags();
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie);
+    function showResult(data) {
+      const detection = document.getElementById('detection');
+      const title = document.getElementById('detection-title');
+      const desc = document.getElementById('detection-desc');
+      const resultEl = document.getElementById('result');
 
-        const detectionEl = document.getElementById('detection');
-        const titleEl = document.getElementById('detection-title');
-        const descEl = document.getElementById('detection-desc');
-
-        if (anySuccess) {
-          const successMethods = Object.entries(allFlags)
-            .filter(([k, v]) => v.localStorage || v.cookie)
-            .map(([k]) => k)
-            .join(', ');
-          detectionEl.className = 'detection detected';
-          titleEl.textContent = 'User visited Landing!';
-          descEl.textContent = 'Working methods: ' + successMethods;
-        } else {
-          detectionEl.className = 'detection not-detected';
-          titleEl.textContent = 'No visit detected';
-          descEl.textContent = 'No tracking data found.';
-        }
-
-        document.getElementById('raw-data').textContent = JSON.stringify({
-          urlParams: { via: urlVia },
-          windowName: window.name || null,
-          allFlags: allFlags,
-          inIframe: window.self !== window.top
-        }, null, 2);
-      }
-
-      function updateDetectionBox() {
-        const allFlags = readAllFlags();
-        const swSuccess = results.sw && results.sw.success;
-        const fpSuccess = results.fingerprint && results.fingerprint.success;
-        const trackerSuccess = results.tracker && (results.tracker.found || results.tracker.fpMatch);
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie) || swSuccess || fpSuccess || trackerSuccess;
-
-        const detectionEl = document.getElementById('detection');
-        const titleEl = document.getElementById('detection-title');
-        const descEl = document.getElementById('detection-desc');
-
-        if (anySuccess) {
-          const successMethods = Object.entries(allFlags)
-            .filter(([k, v]) => v.localStorage || v.cookie)
-            .map(([k]) => k);
-          if (swSuccess) successMethods.push('service_worker');
-          if (fpSuccess) successMethods.push('fingerprint');
-          if (trackerSuccess) successMethods.push('central_tracker');
-          detectionEl.className = 'detection detected';
-          titleEl.textContent = 'User visited Landing!';
-          descEl.textContent = 'Working methods: ' + successMethods.join(', ');
-        } else {
-          detectionEl.className = 'detection not-detected';
-          titleEl.textContent = 'No visit detected';
-          descEl.textContent = '';
-        }
-
-        document.getElementById('raw-data').textContent = JSON.stringify({
-          urlParams: { via: urlVia },
-          windowName: window.name || null,
-          allFlags: allFlags,
-          inIframe: window.self !== window.top
-        }, null, 2);
-      }
-
-      function checkTrackerResult() {
-        const params = new URLSearchParams(window.location.search);
-        const trackerResult = params.get('tracker_result');
-        if (trackerResult) {
-          try {
-            const data = JSON.parse(trackerResult);
-            results.tracker = data;
-            if (data.found || data.fpMatch) {
-              setBadge('tracker', 'data', data.visits.length + ' visits');
-              setData('tracker', data);
-              return true;
-            }
-          } catch (e) {}
-        }
-        results.tracker = { success: false, checked: false };
-        setBadge('tracker', 'pending', 'not checked');
-        return false;
-      }
-
-      async function checkTracker() {
-        setBadge('tracker', 'pending', 'redirecting...');
-        const fp = await generateFingerprint();
-        const currentUrl = window.location.href.split('?')[0] + window.location.search.replace(/[&?]tracker_result=[^&]*/g, '');
-        window.location.href = TRACKER + '/check?fp=' + fp + '&return=' + encodeURIComponent(currentUrl);
-      }
-
-      async function runAllChecks() {
-        checkIframe();
-        checkWindowName();
-        checkPopup();
-        checkCrossCookie();
-        checkRedirect();
-        checkSAA();
-        checkTrackerResult();
-        updateDetectionBox();
-
-        await Promise.all([checkServiceWorker(), checkFingerprint()]);
-        updateDetectionBox();
-      }
-
-      runAllChecks();
-    </script>
-  `;
-
-	return c.html(layout(content.toString(), scripts.toString()));
-});
-
-app.get("/ping", (c) => {
-	const content = html`
-    <h1>Ping Receiver (iframe)</h1>
-    <div id="status">Initializing...</div>
-  `;
-
-	const scripts = html`
-    <script>
-      const SITE_A = '${SITE_A_URL}';
-
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'ping_ready' }, '*');
-        document.getElementById('status').textContent = 'Ready, waiting for message...';
-      }
-
-      window.addEventListener('message', (event) => {
-        console.log('Ping received:', event.data, 'from', event.origin);
-
-        if (event.data && event.data.type === 'set_flag') {
-          const result = writeFlag('test2_iframe');
-          document.getElementById('status').textContent = 'Flag write attempted: ' + JSON.stringify(result);
-
-          if (result.localStorage || result.cookie) {
-            event.source.postMessage({ type: 'flag_set', ...result }, '*');
-          } else {
-            event.source.postMessage({ type: 'flag_error', error: result.errors.join(', ') || 'unknown' }, '*');
-          }
-        }
-      });
-    </script>
-  `;
-
-	return c.html(layout(content.toString(), scripts.toString()));
-});
-
-app.get("/receiver", (c) => {
-	const content = html`
-    <h1>Popup Receiver</h1>
-    <div id="status">Initializing...</div>
-  `;
-
-	const scripts = html`
-    <script>
-      const SITE_A = '${SITE_A_URL}';
-
-      if (window.opener) {
-        window.opener.postMessage({ type: 'receiver_ready' }, '*');
-        document.getElementById('status').textContent = 'Ready, waiting for message from opener...';
+      if (data.found || data.fpMatch) {
+        detection.className = 'detection detected';
+        title.textContent = 'User Tracked!';
+        desc.textContent = 'This user visited a Landing site (' + data.visits.length + ' visits)';
       } else {
-        document.getElementById('status').textContent = 'No opener window found';
+        detection.className = 'detection not-detected';
+        title.textContent = 'Not Tracked';
+        desc.textContent = 'No tracking data found for this user';
       }
 
-      window.addEventListener('message', (event) => {
-        console.log('Receiver got:', event.data, 'from', event.origin);
-
-        if (event.data && event.data.type === 'set_flag') {
-          const result = writeFlag('test4_popup');
-          document.getElementById('status').textContent = 'Flag write attempted: ' + JSON.stringify(result);
-
-          if (window.opener) {
-            if (result.localStorage || result.cookie) {
-              window.opener.postMessage({ type: 'flag_set', ...result }, '*');
-            } else {
-              window.opener.postMessage({ type: 'flag_error', error: result.errors.join(', ') || 'unknown' }, '*');
-            }
-          }
-        }
-      });
-    </script>
-  `;
-
-	return c.html(layout(content.toString(), scripts.toString()));
-});
-
-app.get("/embed", (c) => {
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casino - Embedded</title>
-  <style>
-    body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
-    h3 { color: #fff; margin: 0 0 12px 0; }
-    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; width: 100%; }
-    .btn:hover { background: #1557b0; }
-    .status { padding: 12px; margin: 12px 0; }
-    .success { background: #0a2f0a; color: #4caf50; }
-    .failed { background: #2f0a0a; color: #f44336; }
-    .pending { background: #332b00; color: #ffcc00; }
-    pre { background: #0a0a0a; padding: 8px; font-size: 11px; overflow-x: auto; border: 1px solid #222; color: #aaa; margin: 8px 0; white-space: pre-wrap; word-break: break-all; }
-  </style>
-</head>
-<body>
-  ${raw(storageScript)}
-  <h3>Casino (embedded)</h3>
-
-  <button class="btn" onclick="requestAccess()">Grant Storage Access</button>
-
-  <div id="status" class="status pending">Click button above to grant access</div>
-
-  <pre id="data"></pre>
-
-  <script>
-    const statusEl = document.getElementById('status');
-    const dataEl = document.getElementById('data');
-
-    function notifyParent(success, message) {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'storage_access_result', success, message }, '*');
-      }
+      resultEl.style.display = 'block';
+      resultEl.textContent = JSON.stringify(data, null, 2);
     }
 
-    function showData() {
-      const allFlags = readAllFlags();
-      dataEl.textContent = JSON.stringify(allFlags, null, 2);
+    async function checkTracker() {
+      const detection = document.getElementById('detection');
+      const title = document.getElementById('detection-title');
+      const desc = document.getElementById('detection-desc');
+
+      detection.className = 'detection checking';
+      title.textContent = 'Checking...';
+      desc.textContent = 'Redirecting to Tracker';
+
+      const fp = await generateFingerprint();
+      const returnUrl = window.location.href.split('?')[0];
+      window.location.href = TRACKER + '/check?fp=' + fp + '&return=' + encodeURIComponent(returnUrl);
     }
 
-    async function requestAccess() {
-      if (!document.requestStorageAccess) {
-        statusEl.className = 'status failed';
-        statusEl.textContent = 'Storage Access API not supported';
-        notifyParent(false, 'API not supported');
-        return;
-      }
-
-      try {
-        statusEl.className = 'status pending';
-        statusEl.textContent = 'Requesting...';
-
-        await document.requestStorageAccess();
-        writeFlag('test_saa');
-        showData();
-
-        statusEl.className = 'status success';
-        statusEl.textContent = 'Access granted, flag written!';
-        notifyParent(true, 'Flag written');
-      } catch (e) {
-        statusEl.className = 'status failed';
-        statusEl.textContent = 'Denied: ' + e.message;
-        notifyParent(false, e.message);
-      }
-    }
-
-    showData();
-  </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/check", (c) => {
-	return c.json({
-		info: "Check storage via browser - this endpoint cannot read client storage",
-	});
-});
-
-app.get("/track", (c) => {
-	const origin = c.req.header("Origin") || SITE_A_URL;
-	const timestamp = new Date().toISOString();
-
-	return new Response(JSON.stringify({ success: true, timestamp }), {
-		headers: {
-			"Content-Type": "application/json",
-			"Access-Control-Allow-Origin": origin,
-			"Access-Control-Allow-Credentials": "true",
-			"Set-Cookie": `test5_crosscookie=${timestamp}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
-		},
-	});
-});
-
-app.options("/track", (c) => {
-	const origin = c.req.header("Origin") || SITE_A_URL;
-	return new Response(null, {
-		headers: {
-			"Access-Control-Allow-Origin": origin,
-			"Access-Control-Allow-Credentials": "true",
-			"Access-Control-Allow-Methods": "GET, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type",
-		},
-	});
-});
-
-app.get("/track-verify", (c) => {
-	const origin = c.req.header("Origin") || SITE_A_URL;
-	const cookie = c.req.header("Cookie") || "";
-	const hasTrackingCookie = cookie.includes("test5_crosscookie=");
-
-	return new Response(JSON.stringify({
-		cookieReceived: hasTrackingCookie,
-		rawCookie: cookie || null
-	}), {
-		headers: {
-			"Content-Type": "application/json",
-			"Access-Control-Allow-Origin": origin,
-			"Access-Control-Allow-Credentials": "true",
-		},
-	});
-});
-
-app.options("/track-verify", (c) => {
-	const origin = c.req.header("Origin") || SITE_A_URL;
-	return new Response(null, {
-		headers: {
-			"Access-Control-Allow-Origin": origin,
-			"Access-Control-Allow-Credentials": "true",
-			"Access-Control-Allow-Methods": "GET, OPTIONS",
-		},
-	});
-});
-
-app.get("/bounce", (c) => {
-	const returnUrl = c.req.query("return") || SITE_A_URL;
-	const timestamp = new Date().toISOString();
-
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Redirecting...</title>
-  <style>
-    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div>Writing tracking data and redirecting back...</div>
-  <script>
-    const timestamp = '${timestamp}';
-    const returnUrl = '${returnUrl}';
-
-    try {
-      localStorage.setItem('test6_redirect', timestamp);
-    } catch (e) {}
-
-    try {
-      document.cookie = 'test6_redirect=' + timestamp + '; SameSite=Lax; Secure; path=/; max-age=31536000';
-    } catch (e) {}
-
-    setTimeout(() => {
-      window.location.href = returnUrl;
-    }, 100);
-  </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/windowname-bounce", (c) => {
-	const returnUrl = c.req.query("return") || SITE_A_URL;
-	const timestamp = new Date().toISOString();
-
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Redirecting...</title>
-  <style>
-    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div>Checking window.name and redirecting back...</div>
-  <script>
-    const timestamp = '${timestamp}';
-    const returnUrl = '${returnUrl}';
-
-    if (window.name && window.name.startsWith('visited_siteA')) {
-      try {
-        localStorage.setItem('test3_windowname', timestamp);
-      } catch (e) {}
-
-      try {
-        document.cookie = 'test3_windowname=' + timestamp + '; SameSite=Lax; Secure; path=/; max-age=31536000';
-      } catch (e) {}
-
-      window.name = '';
-    }
-
-    setTimeout(() => {
-      window.location.href = returnUrl;
-    }, 100);
-  </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/sw.js", (c) => {
-	const sw = `
-const CACHE_NAME = 'tracker-v1';
-const FLAG_KEY = 'test10_serviceworker';
-
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    clients.claim().then(() => {
-      return clients.matchAll({ type: 'window' }).then((allClients) => {
-        allClients.forEach((client) => {
-          client.postMessage({ type: 'sw_active', timestamp: new Date().toISOString() });
-        });
-      });
-    })
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  if (event.clientId) {
-    clients.get(event.clientId).then((client) => {
-      if (client) {
-        client.postMessage({ type: 'sw_active' });
-      }
-    });
-  }
-});
-
-self.addEventListener('message', async (event) => {
-  if (event.data && event.data.type === 'write_flag') {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const response = new Response(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        source: event.data.source || 'unknown'
-      }));
-      await cache.put(FLAG_KEY, response);
-      event.ports[0].postMessage({ success: true, type: 'flag_written' });
-    } catch (e) {
-      event.ports[0].postMessage({ success: false, error: e.message, type: 'flag_error' });
-    }
-  }
-
-  if (event.data && event.data.type === 'read_flag') {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const response = await cache.match(FLAG_KEY);
-      if (response) {
-        const data = await response.json();
-        event.ports[0].postMessage({ found: true, data, type: 'flag_read' });
-      } else {
-        event.ports[0].postMessage({ found: false, type: 'flag_read' });
-      }
-    } catch (e) {
-      event.ports[0].postMessage({ found: false, error: e.message, type: 'flag_error' });
-    }
-  }
-
-  if (event.data && event.data.type === 'clear_flag') {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.delete(FLAG_KEY);
-      event.ports[0].postMessage({ success: true, type: 'flag_cleared' });
-    } catch (e) {
-      event.ports[0].postMessage({ success: false, error: e.message, type: 'flag_error' });
-    }
-  }
-});
-`;
-	return new Response(sw, {
-		headers: {
-			"Content-Type": "application/javascript",
-			"Cache-Control": "no-cache",
-		},
-	});
-});
-
-app.get("/sw-register", (c) => {
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>SW Register</title>
-</head>
-<body>
-  <div id="status">Registering Service Worker...</div>
-  <script>
-    async function registerAndWrite() {
-      const status = document.getElementById('status');
-
-      if (!('serviceWorker' in navigator)) {
-        status.textContent = 'Service Worker not supported';
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'sw_error', error: 'not_supported' }, '*');
-        }
-        return;
-      }
-
-      try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        status.textContent = 'SW registered, waiting for activation...';
-
-        await navigator.serviceWorker.ready;
-        status.textContent = 'SW active, writing flag...';
-
-        const channel = new MessageChannel();
-        channel.port1.onmessage = (event) => {
-          if (event.data.success) {
-            status.textContent = 'Flag written successfully!';
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage({ type: 'sw_flag_set', success: true }, '*');
-            }
-          } else {
-            status.textContent = 'Flag write failed: ' + event.data.error;
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage({ type: 'sw_error', error: event.data.error }, '*');
-            }
-          }
-        };
-
-        registration.active.postMessage(
-          { type: 'write_flag', source: 'landing' },
-          [channel.port2]
-        );
-      } catch (e) {
-        status.textContent = 'Error: ' + e.message;
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'sw_error', error: e.message }, '*');
-        }
-      }
-    }
-
-    registerAndWrite();
-  </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/fingerprint-receiver", (c) => {
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head><title>FP</title></head>
-<body>
-<script>
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: 'fp_ready' }, '*');
-  }
-
-  window.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'store_fp') {
-      try {
-        const stored = JSON.parse(localStorage.getItem('test11_fingerprint') || '[]');
-        if (!stored.includes(event.data.hash)) {
-          stored.push(event.data.hash);
-          localStorage.setItem('test11_fingerprint', JSON.stringify(stored));
-        }
-        event.source.postMessage({ type: 'fp_stored' }, '*');
-      } catch (e) {
-        event.source.postMessage({ type: 'fp_error', error: e.message }, '*');
-      }
-    }
-  });
-</script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/fingerprint-bounce", (c) => {
-	const fp = c.req.query("fp") || "";
-	const returnUrl = c.req.query("return") || SITE_A_URL;
-	const timestamp = new Date().toISOString();
-
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Redirecting...</title>
-  <style>
-    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div>Storing fingerprint and redirecting back...</div>
-  <script>
-    const fp = '${fp}';
-    const timestamp = '${timestamp}';
-    const returnUrl = '${returnUrl}';
-
-    if (fp) {
-      try {
-        const stored = JSON.parse(localStorage.getItem('test11_fingerprints') || '[]');
-        const exists = stored.some(item => item.hash === fp);
-        if (!exists) {
-          stored.push({ hash: fp, timestamp: timestamp });
-          localStorage.setItem('test11_fingerprints', JSON.stringify(stored));
-        }
-      } catch (e) {
-        console.error('Failed to store fingerprint:', e);
-      }
-    }
-
-    setTimeout(() => {
-      window.location.href = returnUrl;
-    }, 100);
+    parseTrackerResult();
   </script>
 </body>
 </html>

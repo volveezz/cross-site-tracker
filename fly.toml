@@ -2,7 +2,6 @@ app = 'cross-site-tracker'
 primary_region = 'ams'
 
 [env]
-  SITE_X_URL = "https://korenev-dev-user-tracker-a.7b49r5.easypanel.host"
   TRACKER_URL = "https://cross-site-tracker.vercel.app"
 
 [http_service]
