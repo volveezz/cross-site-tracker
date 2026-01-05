@@ -325,9 +325,18 @@ app.get("/", (c) => {
           }
 
           const registration = await navigator.serviceWorker.getRegistration();
-          if (!registration || !registration.active) {
-            results.sw = { success: false, error: 'No active SW' };
+          if (!registration) {
+            results.sw = { success: false, error: 'No SW registered' };
             setBadge('sw', 'failed', 'no SW');
+            setData('sw', results.sw);
+            return false;
+          }
+
+          await navigator.serviceWorker.ready;
+          const activeWorker = registration.active || navigator.serviceWorker.controller;
+          if (!activeWorker) {
+            results.sw = { success: false, error: 'SW not active' };
+            setBadge('sw', 'failed', 'not active');
             setData('sw', results.sw);
             return false;
           }
@@ -335,7 +344,7 @@ app.get("/", (c) => {
           const channel = new MessageChannel();
           const response = await new Promise((resolve) => {
             channel.port1.onmessage = (event) => resolve(event.data);
-            registration.active.postMessage({ type: 'read_flag' }, [channel.port2]);
+            activeWorker.postMessage({ type: 'read_flag' }, [channel.port2]);
             setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
           });
 
