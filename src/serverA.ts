@@ -43,19 +43,16 @@ app.get("/", (c) => {
   <h1>Landing</h1>
   <div class="info">
     <strong>Target:</strong> ${SITE_X_URL}<br>
-    <strong>Purpose:</strong> Set tracking flags that Game can detect
+    <strong>Purpose:</strong> Set tracking flags that Casino can detect
   </div>
 
   <button class="run-all" onclick="runAllTests()">Run All Tests</button>
-  <p>
-    <a href="${SITE_X_URL}" target="_blank">Open Game to check results</a> |
-    <a href="/framed-tests">View Game in frame (third-party context)</a>
-  </p>
+  <p><a href="${SITE_X_URL}" target="_blank">Open Casino to check results</a></p>
 
   <div class="tests">
     <div class="test" id="test-iframe">
       <h3>Iframe</h3>
-      <p>Load hidden iframe of Game, send postMessage</p>
+      <p>Load hidden iframe of Casino, send postMessage</p>
       <button onclick="runIframe()">Run</button>
       <div id="iframe-status" class="status pending">Not run</div>
       <div id="iframe-data" class="result-data" style="display:none"></div>
@@ -70,7 +67,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-popup">
       <h3>Popup</h3>
-      <p>Open popup to Game and send postMessage</p>
+      <p>Open popup to Casino and send postMessage</p>
       <button onclick="runPopup()">Run</button>
       <div id="popup-status" class="status pending">Not run</div>
       <div id="popup-data" class="result-data" style="display:none"></div>
@@ -88,7 +85,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-crosscookie">
       <h3>Cross-Origin Cookie</h3>
-      <p>Fetch request to Game with credentials, server sets cookie via Set-Cookie header</p>
+      <p>Fetch request to Casino with credentials, server sets cookie via Set-Cookie header</p>
       <button onclick="runCrossCookie()">Run</button>
       <button onclick="checkCrossCookie()">Check</button>
       <div id="crosscookie-status" class="status pending">Not run</div>
@@ -97,14 +94,14 @@ app.get("/", (c) => {
 
     <div class="test" id="test-redirect">
       <h3>Redirect Bounce</h3>
-      <p>Redirect to Game, write to first-party storage, redirect back (visible, but works in Safari)</p>
+      <p>Redirect to Casino, write to first-party storage, redirect back (visible, but works in Safari)</p>
       <button onclick="runRedirectTrack()">Run</button>
       <div id="redirect-status" class="status pending">Not run</div>
     </div>
 
     <div class="test" id="test-sw">
       <h3>Service Worker</h3>
-      <p>Register SW on Game via iframe, write flag to Cache API</p>
+      <p>Register SW on Casino via iframe, write flag to Cache API</p>
       <button onclick="runServiceWorker()">Run</button>
       <div id="sw-status" class="status pending">Not run</div>
       <div id="sw-data" class="result-data" style="display:none"></div>
@@ -112,7 +109,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-fingerprint">
       <h3>Fingerprint</h3>
-      <p>Calculate browser fingerprint, store on Game via iframe. Verifies same browser.</p>
+      <p>Calculate browser fingerprint, store on Casino via iframe. Verifies same browser.</p>
       <button onclick="runFingerprint()">Run</button>
       <div id="fingerprint-status" class="status pending">Not run</div>
       <div id="fingerprint-data" class="result-data" style="display:none"></div>
@@ -287,7 +284,7 @@ app.get("/", (c) => {
     }
 
     function runRedirectTrack() {
-      setStatus('redirect', 'running', 'Redirecting to Game...');
+      setStatus('redirect', 'running', 'Redirecting to Casino...');
       window.location.href = SITE_X + '/bounce?return=' + encodeURIComponent(window.location.href);
     }
 
@@ -356,7 +353,7 @@ app.get("/", (c) => {
       setStatus('fingerprint', 'running', 'Calculating fingerprint...');
       try {
         const fp = await generateFingerprint();
-        setStatus('fingerprint', 'running', 'Storing on Game via iframe...', { hash: fp });
+        setStatus('fingerprint', 'running', 'Storing on Casino via iframe...', { hash: fp });
 
         const iframe = document.createElement('iframe');
         iframe.src = SITE_X + '/fingerprint-receiver';
@@ -375,7 +372,7 @@ app.get("/", (c) => {
           if (e.data && e.data.type === 'fp_stored') {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
-            setStatus('fingerprint', 'success', 'Fingerprint stored on Game', { hash: fp });
+            setStatus('fingerprint', 'success', 'Fingerprint stored on Casino', { hash: fp });
             iframe.remove();
           }
           if (e.data && e.data.type === 'fp_error') {
@@ -481,36 +478,6 @@ async function checkSW() {
 }
 checkSW();
 </script>
-</body>
-</html>
-`;
-	return c.html(page.toString());
-});
-
-app.get("/framed-tests", (c) => {
-	const page = html`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Game (Third-Party Context)</title>
-  <style>
-    body { background: #000; color: #fff; font-family: system-ui; padding: 20px; margin: 0; }
-    h1 { margin: 0 0 8px 0; }
-    p { color: #888; margin: 0 0 16px 0; }
-    a { color: #8ab4f8; }
-    iframe { width: 100%; height: calc(100vh - 120px); border: 2px solid #333; background: #111; }
-    @media (max-width: 600px) {
-      body { padding: 12px; }
-      iframe { height: calc(100vh - 100px); }
-    }
-  </style>
-</head>
-<body>
-  <h1>Game (embedded in Landing)</h1>
-  <p>Same tests, but Game is now third-party. Storage partition: (Game, Landing) vs (Game, Game). <a href="/">Back to Landing</a></p>
-  <iframe src="${SITE_X_URL}/"></iframe>
 </body>
 </html>
 `;

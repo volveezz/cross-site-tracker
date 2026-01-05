@@ -74,13 +74,13 @@ const storageScript = `
 </script>
 `;
 
-const layout = (content: string, scripts: string = "") => `
+const layout = (content: string, scripts: string = "", title: string = "Casino") => `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Game</title>
+  <title>${title}</title>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
     h1 { color: #fff; }
@@ -118,13 +118,65 @@ const layout = (content: string, scripts: string = "") => `
 `;
 
 app.get("/", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Casino</title>
+  <style>
+    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
+    h1 { color: #fff; margin-bottom: 20px; }
+    .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
+    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; }
+    .btn:hover { background: #1557b0; }
+    a { color: #8ab4f8; }
+    .frame-container { margin-top: 20px; display: none; }
+    iframe { width: 100%; height: 70vh; border: 2px solid #333; background: #111; }
+    @media (max-width: 600px) {
+      body { margin: 20px auto; }
+      .btn { width: 100%; }
+      iframe { height: 60vh; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Casino</h1>
+  <div class="info">
+    <strong>Tracker:</strong> ${SITE_A_URL}<br>
+    <strong>Purpose:</strong> Detect if user visited Landing via embedded tests
+  </div>
+
+  <button class="btn" onclick="loadTests()">Load Tracking Tests</button>
+  <a href="${SITE_A_URL}" style="margin-left: 16px;">Go to Landing</a>
+
+  <div id="frame-container" class="frame-container">
+    <iframe id="tests-frame"></iframe>
+  </div>
+
+  <script>
+    function loadTests() {
+      const container = document.getElementById('frame-container');
+      const iframe = document.getElementById('tests-frame');
+      container.style.display = 'block';
+      iframe.src = '/tests' + window.location.search;
+    }
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/tests", (c) => {
 	const via = c.req.query("via");
 
 	const content = html`
-    <h1>Game</h1>
+    <h1>Casino - Tests</h1>
     <div class="info">
-      <strong>Origin:</strong> ${SITE_A_URL}<br>
-      <strong>Purpose:</strong> Detect if user visited Landing
+      <strong>Tracker:</strong> ${SITE_A_URL}<br>
+      <strong>Context:</strong> ${`\${window.self === window.top ? 'Direct visit' : 'Embedded (third-party)'}`}
     </div>
 
     <div id="detection" class="detection not-detected">
@@ -202,7 +254,6 @@ app.get("/", (c) => {
     <h3>Actions</h3>
     <button onclick="location.reload()">Refresh</button>
     <button onclick="clearAllFlags(); location.reload();">Clear All Storage</button>
-    <a href="${SITE_A_URL}">Go to Landing</a>
 
     <h3>Raw Storage Data</h3>
     <div id="raw-data" class="data"></div>
@@ -580,7 +631,7 @@ app.get("/embed", (c) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Game - Embedded</title>
+  <title>Casino - Embedded</title>
   <style>
     body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
     h3 { color: #fff; margin: 0 0 12px 0; }
@@ -595,7 +646,7 @@ app.get("/embed", (c) => {
 </head>
 <body>
   ${raw(storageScript)}
-  <h3>Game (embedded)</h3>
+  <h3>Casino (embedded)</h3>
 
   <button class="btn" onclick="requestAccess()">Grant Storage Access</button>
 
