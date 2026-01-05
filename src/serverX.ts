@@ -7,7 +7,7 @@ const app = new Hono();
 
 const storageScript = `
 <script>
-  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test7_indexeddb', 'test8_etag', 'test9_cacheimg', 'test10_serviceworker', 'test11_fingerprint'];
+  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test10_serviceworker', 'test11_fingerprint'];
 
   function setCookie(name, value) {
     document.cookie = name + '=' + value + '; SameSite=None; Secure; path=/; max-age=31536000';
@@ -16,45 +16,6 @@ const storageScript = `
   function getCookie(name) {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? match[2] : null;
-  }
-
-  function openIDB() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open('tracker', 1);
-      req.onupgradeneeded = () => req.result.createObjectStore('flags');
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function writeIDB(key, value) {
-    const db = await openIDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('flags', 'readwrite');
-      tx.objectStore('flags').put(value, key);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  async function readIDB(key) {
-    const db = await openIDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('flags', 'readonly');
-      const req = tx.objectStore('flags').get(key);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function clearIDB() {
-    const db = await openIDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('flags', 'readwrite');
-      tx.objectStore('flags').clear();
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
-    });
   }
 
   function writeFlag(testKey) {
@@ -78,18 +39,6 @@ const storageScript = `
     return results;
   }
 
-  async function writeFlagWithIDB(testKey) {
-    const results = writeFlag(testKey);
-    results.indexedDB = false;
-    try {
-      await writeIDB(testKey, results.timestamp);
-      results.indexedDB = true;
-    } catch (e) {
-      results.errors.push('indexedDB: ' + e.message);
-    }
-    return results;
-  }
-
   function readFlag(testKey) {
     const results = { testKey, localStorage: null, cookie: null, errors: [] };
 
@@ -108,17 +57,6 @@ const storageScript = `
     return results;
   }
 
-  async function readFlagWithIDB(testKey) {
-    const results = readFlag(testKey);
-    results.indexedDB = null;
-    try {
-      results.indexedDB = await readIDB(testKey);
-    } catch (e) {
-      results.errors.push('indexedDB: ' + e.message);
-    }
-    return results;
-  }
-
   function readAllFlags() {
     const all = {};
     for (const key of TESTS) {
@@ -127,20 +65,11 @@ const storageScript = `
     return all;
   }
 
-  async function readAllFlagsWithIDB() {
-    const all = {};
-    for (const key of TESTS) {
-      all[key] = await readFlagWithIDB(key);
-    }
-    return all;
-  }
-
-  async function clearAllFlags() {
+  function clearAllFlags() {
     for (const key of TESTS) {
       try { localStorage.removeItem(key); } catch (e) {}
       document.cookie = key + '=; path=/; max-age=0';
     }
-    try { await clearIDB(); } catch (e) {}
   }
 </script>
 `;
@@ -235,6 +164,7 @@ app.get("/", (c) => {
           <span class="test-name">Cross-Origin Cookie</span>
           <span id="crosscookie-badge" class="badge badge-pending">checking</span>
         </div>
+        <button onclick="checkCrossCookieManual()" style="margin-top:8px">Check Cookie</button>
         <div id="crosscookie-data" class="data" style="display:none"></div>
       </div>
 
@@ -244,30 +174,6 @@ app.get("/", (c) => {
           <span id="redirect-badge" class="badge badge-pending">checking</span>
         </div>
         <div id="redirect-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">IndexedDB (iframe)</span>
-          <span id="indexeddb-badge" class="badge badge-pending">checking</span>
-        </div>
-        <div id="indexeddb-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">ETag Tracking</span>
-          <span id="etag-badge" class="badge badge-pending">checking</span>
-        </div>
-        <div id="etag-data" class="data" style="display:none"></div>
-      </div>
-
-      <div class="test">
-        <div class="test-header">
-          <span class="test-name">Cache Image</span>
-          <span id="cacheimg-badge" class="badge badge-pending">checking</span>
-        </div>
-        <div id="cacheimg-data" class="data" style="display:none"></div>
       </div>
 
       <div class="test">
@@ -407,74 +313,6 @@ app.get("/", (c) => {
         setBadge('redirect', 'failed', 'no data');
         setData('redirect', results.redirect);
         return false;
-      }
-
-      async function checkIndexedDB() {
-        try {
-          const flags = await readFlagWithIDB('test7_indexeddb');
-          if (flags.localStorage || flags.cookie || flags.indexedDB) {
-            results.indexeddb = { success: true, method: 'indexeddb_iframe', ...flags };
-            setBadge('indexeddb', 'data', 'HAS DATA');
-            setData('indexeddb', results.indexeddb);
-            return true;
-          }
-          results.indexeddb = { success: false, ...flags };
-          setBadge('indexeddb', 'failed', 'no data');
-          setData('indexeddb', results.indexeddb);
-          return false;
-        } catch (e) {
-          results.indexeddb = { success: false, error: e.message };
-          setBadge('indexeddb', 'failed', 'error');
-          setData('indexeddb', results.indexeddb);
-          return false;
-        }
-      }
-
-      async function checkEtag() {
-        try {
-          const res = await fetch('/etag-pixel', { cache: 'force-cache', credentials: 'include' });
-          const found = res.headers.get('X-Tracker-Found') === 'true';
-          const timestamp = res.headers.get('X-Tracker-Timestamp');
-          if (found) {
-            results.etag = { success: true, method: 'etag', found, timestamp };
-            setBadge('etag', 'data', 'HAS DATA');
-            setData('etag', results.etag);
-            await writeIDB('test8_etag', timestamp);
-            return true;
-          }
-          results.etag = { success: false, found, note: 'ETag not recognized (new visitor or cache cleared)' };
-          setBadge('etag', 'failed', 'no match');
-          setData('etag', results.etag);
-          return false;
-        } catch (e) {
-          results.etag = { success: false, error: e.message };
-          setBadge('etag', 'failed', 'error');
-          setData('etag', results.etag);
-          return false;
-        }
-      }
-
-      async function checkCacheImg() {
-        try {
-          const res = await fetch('/cache-img-list');
-          const data = await res.json();
-          if (data.count > 0) {
-            results.cacheimg = { success: true, method: 'cache_image', ...data };
-            setBadge('cacheimg', 'data', 'HAS DATA');
-            setData('cacheimg', results.cacheimg);
-            await writeIDB('test9_cacheimg', data.lastSeen);
-            return true;
-          }
-          results.cacheimg = { success: false, ...data };
-          setBadge('cacheimg', 'failed', 'no cached images');
-          setData('cacheimg', results.cacheimg);
-          return false;
-        } catch (e) {
-          results.cacheimg = { success: false, error: e.message };
-          setBadge('cacheimg', 'failed', 'error');
-          setData('cacheimg', results.cacheimg);
-          return false;
-        }
       }
 
       async function checkServiceWorker() {
@@ -625,23 +463,42 @@ app.get("/", (c) => {
         }, null, 2);
       }
 
+      async function checkCrossCookieManual() {
+        setBadge('crosscookie', 'pending', 'checking...');
+        try {
+          const res = await fetch('/track-verify', { credentials: 'include' });
+          const data = await res.json();
+          if (data.cookieReceived) {
+            results.crosscookie = { success: true, method: 'cross_origin_cookie', ...data };
+            setBadge('crosscookie', 'data', 'COOKIE FOUND');
+            setData('crosscookie', results.crosscookie);
+          } else {
+            results.crosscookie = { success: false, ...data };
+            setBadge('crosscookie', 'failed', 'no cookie');
+            setData('crosscookie', results.crosscookie);
+          }
+        } catch (e) {
+          results.crosscookie = { success: false, error: e.message };
+          setBadge('crosscookie', 'failed', 'error');
+          setData('crosscookie', results.crosscookie);
+        }
+        updateDetection();
+      }
+
       async function runAllChecks() {
         checkIframe();
         checkWindowName();
         checkPopup();
         checkCrossCookie();
         checkRedirect();
-        await checkIndexedDB();
-        await checkEtag();
-        await checkCacheImg();
         await checkServiceWorker();
         await checkFingerprint();
         checkSAA();
 
-        const allFlags = await readAllFlagsWithIDB();
+        const allFlags = readAllFlags();
         const swSuccess = results.sw && results.sw.success;
         const fpSuccess = results.fingerprint && results.fingerprint.success;
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie || f.indexedDB) || swSuccess || fpSuccess;
+        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie) || swSuccess || fpSuccess;
 
         const detectionEl = document.getElementById('detection');
         const titleEl = document.getElementById('detection-title');
@@ -649,7 +506,7 @@ app.get("/", (c) => {
 
         if (anySuccess) {
           const successMethods = Object.entries(allFlags)
-            .filter(([k, v]) => v.localStorage || v.cookie || v.indexedDB)
+            .filter(([k, v]) => v.localStorage || v.cookie)
             .map(([k]) => k);
           if (swSuccess) successMethods.push('service_worker');
           if (fpSuccess) successMethods.push('fingerprint');
@@ -966,123 +823,6 @@ app.get("/bounce", (c) => {
 </html>
 `;
 	return c.html(page.toString());
-});
-
-app.get("/ping-idb", (c) => {
-	const content = html`
-    <h1>IndexedDB Ping (iframe)</h1>
-    <div id="status">Initializing...</div>
-  `;
-
-	const scripts = html`
-    <script>
-      const SITE_A = '${SITE_A_URL}';
-
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'ping_idb_ready' }, '*');
-        document.getElementById('status').textContent = 'Ready, waiting for message...';
-      }
-
-      window.addEventListener('message', async (event) => {
-        if (event.data && event.data.type === 'set_flag_idb') {
-          const result = await writeFlagWithIDB('test7_indexeddb');
-          document.getElementById('status').textContent = 'Flag write attempted: ' + JSON.stringify(result);
-
-          if (result.localStorage || result.cookie || result.indexedDB) {
-            event.source.postMessage({ type: 'flag_idb_set', ...result }, '*');
-          } else {
-            event.source.postMessage({ type: 'flag_idb_error', error: result.errors.join(', ') || 'unknown' }, '*');
-          }
-        }
-      });
-    </script>
-  `;
-
-	return c.html(layout(content.toString(), scripts.toString()));
-});
-
-const etagStore = new Map<string, string>();
-
-app.get("/etag-pixel", (c) => {
-	const ifNoneMatch = c.req.header("If-None-Match");
-
-	if (ifNoneMatch && etagStore.has(ifNoneMatch)) {
-		return new Response(null, {
-			status: 304,
-			headers: {
-				"ETag": ifNoneMatch,
-				"Cache-Control": "private, max-age=31536000",
-				"Access-Control-Allow-Origin": SITE_A_URL,
-				"Access-Control-Allow-Credentials": "true",
-				"X-Tracker-Found": "true",
-				"X-Tracker-Timestamp": etagStore.get(ifNoneMatch) || "",
-			},
-		});
-	}
-
-	const timestamp = new Date().toISOString();
-	const etag = `"tracker-${Date.now()}-${Math.random().toString(36).slice(2)}"`;
-	etagStore.set(etag, timestamp);
-
-	const pixel = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
-
-	return new Response(pixel, {
-		headers: {
-			"Content-Type": "image/gif",
-			"ETag": etag,
-			"Cache-Control": "private, max-age=31536000",
-			"Access-Control-Allow-Origin": SITE_A_URL,
-			"Access-Control-Allow-Credentials": "true",
-			"Access-Control-Expose-Headers": "ETag, X-Tracker-New, X-Tracker-Timestamp",
-			"X-Tracker-New": "true",
-			"X-Tracker-Timestamp": timestamp,
-		},
-	});
-});
-
-app.get("/etag-check", (c) => {
-	const etag = c.req.query("etag");
-	if (etag && etagStore.has(etag)) {
-		return c.json({ found: true, timestamp: etagStore.get(etag) });
-	}
-	return c.json({ found: false });
-});
-
-const cacheImgStore = new Map<string, string>();
-
-app.get("/cache-img/:id", (c) => {
-	const id = c.req.param("id");
-	const timestamp = new Date().toISOString();
-
-	cacheImgStore.set(id, timestamp);
-
-	const pixel = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
-
-	return new Response(pixel, {
-		headers: {
-			"Content-Type": "image/gif",
-			"Cache-Control": "public, max-age=31536000, immutable",
-			"Access-Control-Allow-Origin": "*",
-		},
-	});
-});
-
-app.get("/cache-img-check/:id", (c) => {
-	const id = c.req.param("id");
-	if (cacheImgStore.has(id)) {
-		return c.json({ found: true, timestamp: cacheImgStore.get(id) });
-	}
-	return c.json({ found: false });
-});
-
-app.get("/cache-img-list", (c) => {
-	const entries = Array.from(cacheImgStore.entries());
-	const last = entries[entries.length - 1];
-	return c.json({
-		count: entries.length,
-		ids: entries.map(([id, ts]) => ({ id, timestamp: ts })),
-		lastSeen: last ? last[1] : null,
-	});
 });
 
 app.get("/windowname-bounce", (c) => {
