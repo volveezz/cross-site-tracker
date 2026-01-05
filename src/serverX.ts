@@ -580,61 +580,71 @@ app.get("/embed", (c) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAA Test</title>
+  <title>Game - Embedded</title>
   <style>
-    body { font-family: system-ui; padding: 20px; margin: 0; background: #000; color: #e0e0e0; text-align: center; }
-    .btn { padding: 16px 32px; font-size: 18px; cursor: pointer; background: #1a73e8; color: white; border: none; margin: 20px 0; }
+    body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
+    h3 { color: #fff; margin: 0 0 12px 0; }
+    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; width: 100%; }
     .btn:hover { background: #1557b0; }
     .status { padding: 12px; margin: 12px 0; }
     .success { background: #0a2f0a; color: #4caf50; }
     .failed { background: #2f0a0a; color: #f44336; }
-    .pending { background: #222; color: #888; }
+    .pending { background: #332b00; color: #ffcc00; }
+    pre { background: #0a0a0a; padding: 8px; font-size: 11px; overflow-x: auto; border: 1px solid #222; color: #aaa; margin: 8px 0; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
 <body>
   ${raw(storageScript)}
-  <h2>Storage Access API</h2>
-  <p>Click to grant storage access and write flag</p>
+  <h3>Game (embedded)</h3>
 
-  <button class="btn" onclick="requestAccess()">Grant Access</button>
+  <button class="btn" onclick="requestAccess()">Grant Storage Access</button>
 
-  <div id="status" class="status pending">Waiting for click...</div>
+  <div id="status" class="status pending">Click button above to grant access</div>
+
+  <pre id="data"></pre>
 
   <script>
-    function notifyParent(success, message, data) {
+    const statusEl = document.getElementById('status');
+    const dataEl = document.getElementById('data');
+
+    function notifyParent(success, message) {
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'storage_access_result', success, message, ...data }, '*');
+        window.parent.postMessage({ type: 'storage_access_result', success, message }, '*');
       }
     }
 
-    async function requestAccess() {
-      const status = document.getElementById('status');
+    function showData() {
+      const allFlags = readAllFlags();
+      dataEl.textContent = JSON.stringify(allFlags, null, 2);
+    }
 
+    async function requestAccess() {
       if (!document.requestStorageAccess) {
-        status.className = 'status failed';
-        status.textContent = 'Storage Access API not supported';
+        statusEl.className = 'status failed';
+        statusEl.textContent = 'Storage Access API not supported';
         notifyParent(false, 'API not supported');
         return;
       }
 
       try {
-        status.className = 'status pending';
-        status.textContent = 'Requesting access...';
+        statusEl.className = 'status pending';
+        statusEl.textContent = 'Requesting...';
 
         await document.requestStorageAccess();
-
         writeFlag('test_saa');
-        const flag = readFlag('test_saa');
+        showData();
 
-        status.className = 'status success';
-        status.textContent = 'Done! Flag written.';
-        notifyParent(true, 'Flag written', flag);
+        statusEl.className = 'status success';
+        statusEl.textContent = 'Access granted, flag written!';
+        notifyParent(true, 'Flag written');
       } catch (e) {
-        status.className = 'status failed';
-        status.textContent = 'Denied: ' + e.message;
+        statusEl.className = 'status failed';
+        statusEl.textContent = 'Denied: ' + e.message;
         notifyParent(false, e.message);
       }
     }
+
+    showData();
   </script>
 </body>
 </html>
