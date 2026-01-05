@@ -164,7 +164,6 @@ app.get("/", (c) => {
           <span class="test-name">Cross-Origin Cookie</span>
           <span id="crosscookie-badge" class="badge badge-pending">checking</span>
         </div>
-        <button onclick="checkCrossCookieManual()" style="margin-top:8px">Check Cookie</button>
         <div id="crosscookie-data" class="data" style="display:none"></div>
       </div>
 
@@ -325,42 +324,30 @@ app.get("/", (c) => {
             return false;
           }
 
-          const registrations = await navigator.serviceWorker.getRegistrations();
           const controller = navigator.serviceWorker.controller;
+          if (controller) {
+            const channel = new MessageChannel();
+            const response = await new Promise((resolve) => {
+              channel.port1.onmessage = (event) => resolve(event.data);
+              controller.postMessage({ type: 'read_flag' }, [channel.port2]);
+              setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
+            });
 
-          if (registrations.length === 0 && !controller) {
-            results.sw = { success: false, error: 'No SW registered' };
-            setBadge('sw', 'failed', 'no SW');
+            if (response.found) {
+              results.sw = { success: true, method: 'service_worker', ...response.data };
+              setBadge('sw', 'data', 'HAS DATA');
+              setData('sw', results.sw);
+              return true;
+            }
+
+            results.sw = { success: false, ...response };
+            setBadge('sw', 'failed', 'no flag');
             setData('sw', results.sw);
             return false;
           }
 
-          const registration = registrations[0] || await navigator.serviceWorker.ready;
-          const activeWorker = registration.active || controller;
-
-          if (!activeWorker) {
-            results.sw = { success: false, error: 'SW not active' };
-            setBadge('sw', 'failed', 'not active');
-            setData('sw', results.sw);
-            return false;
-          }
-
-          const channel = new MessageChannel();
-          const response = await new Promise((resolve) => {
-            channel.port1.onmessage = (event) => resolve(event.data);
-            activeWorker.postMessage({ type: 'read_flag' }, [channel.port2]);
-            setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
-          });
-
-          if (response.found) {
-            results.sw = { success: true, method: 'service_worker', ...response.data };
-            setBadge('sw', 'data', 'HAS DATA');
-            setData('sw', results.sw);
-            return true;
-          }
-
-          results.sw = { success: false, ...response };
-          setBadge('sw', 'failed', 'no flag');
+          results.sw = { success: false, error: 'No SW controlling this page' };
+          setBadge('sw', 'failed', 'no SW');
           setData('sw', results.sw);
           return false;
         } catch (e) {
@@ -478,76 +465,7 @@ app.get("/", (c) => {
 
       async function checkServiceWorkerManual() {
         setBadge('sw', 'pending', 'checking...');
-        try {
-          if (!('serviceWorker' in navigator)) {
-            results.sw = { success: false, error: 'SW not supported' };
-            setBadge('sw', 'failed', 'not supported');
-            setData('sw', results.sw);
-            return;
-          }
-
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          const controller = navigator.serviceWorker.controller;
-
-          if (registrations.length === 0 && !controller) {
-            results.sw = { success: false, error: 'No SW registered', registrations: 0, hasController: false };
-            setBadge('sw', 'failed', 'no SW');
-            setData('sw', results.sw);
-            return;
-          }
-
-          const registration = registrations[0] || await navigator.serviceWorker.ready;
-          const activeWorker = registration.active || controller;
-
-          if (!activeWorker) {
-            results.sw = { success: false, error: 'SW not active', scope: registration.scope };
-            setBadge('sw', 'failed', 'not active');
-            setData('sw', results.sw);
-            return;
-          }
-
-          const channel = new MessageChannel();
-          const response = await new Promise((resolve) => {
-            channel.port1.onmessage = (event) => resolve(event.data);
-            activeWorker.postMessage({ type: 'read_flag' }, [channel.port2]);
-            setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
-          });
-
-          if (response.found) {
-            results.sw = { success: true, method: 'service_worker', scope: registration.scope, ...response.data };
-            setBadge('sw', 'data', 'HAS DATA');
-          } else {
-            results.sw = { success: false, scope: registration.scope, ...response };
-            setBadge('sw', 'failed', 'no flag');
-          }
-          setData('sw', results.sw);
-          updateDetection();
-        } catch (e) {
-          results.sw = { success: false, error: e.message };
-          setBadge('sw', 'failed', 'error');
-          setData('sw', results.sw);
-        }
-      }
-
-      async function checkCrossCookieManual() {
-        setBadge('crosscookie', 'pending', 'checking...');
-        try {
-          const res = await fetch('/track-verify', { credentials: 'include' });
-          const data = await res.json();
-          if (data.cookieReceived) {
-            results.crosscookie = { success: true, method: 'cross_origin_cookie', ...data };
-            setBadge('crosscookie', 'data', 'COOKIE FOUND');
-            setData('crosscookie', results.crosscookie);
-          } else {
-            results.crosscookie = { success: false, ...data };
-            setBadge('crosscookie', 'failed', 'no cookie');
-            setData('crosscookie', results.crosscookie);
-          }
-        } catch (e) {
-          results.crosscookie = { success: false, error: e.message };
-          setBadge('crosscookie', 'failed', 'error');
-          setData('crosscookie', results.crosscookie);
-        }
+        await checkServiceWorker();
         updateDetection();
       }
 
