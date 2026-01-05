@@ -178,7 +178,7 @@ app.get("/tests", (c) => {
     <div class="info">
       <strong>Landing:</strong> ${SITE_A_URL}<br>
       <strong>Tracker:</strong> ${TRACKER_URL}<br>
-      <strong>Context:</strong> ${`\${window.self === window.top ? 'Direct visit' : 'Embedded (third-party)'}`}
+      <strong>Context:</strong> <span id="context-info">checking...</span>
     </div>
 
     <div id="detection" class="detection not-detected">
@@ -275,6 +275,8 @@ app.get("/tests", (c) => {
       const urlVia = '${via || ""}';
       const TRACKER = '${TRACKER_URL}';
       const results = {};
+
+      document.getElementById('context-info').textContent = window.self === window.top ? 'Direct visit' : 'Embedded (third-party)';
       let swDetected = false;
       let swWorker = null;
 
