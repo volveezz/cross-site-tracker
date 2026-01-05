@@ -7,7 +7,7 @@ const app = new Hono();
 
 const storageScript = `
 <script>
-  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test7_indexeddb', 'test8_etag', 'test9_cacheimg'];
+  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test7_indexeddb', 'test8_etag', 'test9_cacheimg', 'test10_serviceworker', 'test11_fingerprint'];
 
   function setCookie(name, value) {
     document.cookie = name + '=' + value + '; SameSite=None; Secure; path=/; max-age=31536000';
@@ -269,6 +269,22 @@ app.get("/", (c) => {
         </div>
         <div id="cacheimg-data" class="data" style="display:none"></div>
       </div>
+
+      <div class="test">
+        <div class="test-header">
+          <span class="test-name">Service Worker</span>
+          <span id="sw-badge" class="badge badge-pending">checking</span>
+        </div>
+        <div id="sw-data" class="data" style="display:none"></div>
+      </div>
+
+      <div class="test">
+        <div class="test-header">
+          <span class="test-name">Fingerprint</span>
+          <span id="fingerprint-badge" class="badge badge-pending">checking</span>
+        </div>
+        <div id="fingerprint-data" class="data" style="display:none"></div>
+      </div>
     </div>
 
     <div class="saa-section">
@@ -461,6 +477,102 @@ app.get("/", (c) => {
         }
       }
 
+      async function checkServiceWorker() {
+        try {
+          if (!('serviceWorker' in navigator)) {
+            results.sw = { success: false, error: 'SW not supported' };
+            setBadge('sw', 'failed', 'not supported');
+            setData('sw', results.sw);
+            return false;
+          }
+
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (!registration || !registration.active) {
+            results.sw = { success: false, error: 'No active SW' };
+            setBadge('sw', 'failed', 'no SW');
+            setData('sw', results.sw);
+            return false;
+          }
+
+          const channel = new MessageChannel();
+          const response = await new Promise((resolve) => {
+            channel.port1.onmessage = (event) => resolve(event.data);
+            registration.active.postMessage({ type: 'read_flag' }, [channel.port2]);
+            setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
+          });
+
+          if (response.found) {
+            results.sw = { success: true, method: 'service_worker', ...response.data };
+            setBadge('sw', 'data', 'HAS DATA');
+            setData('sw', results.sw);
+            return true;
+          }
+
+          results.sw = { success: false, ...response };
+          setBadge('sw', 'failed', 'no flag');
+          setData('sw', results.sw);
+          return false;
+        } catch (e) {
+          results.sw = { success: false, error: e.message };
+          setBadge('sw', 'failed', 'error');
+          setData('sw', results.sw);
+          return false;
+        }
+      }
+
+      async function generateFingerprint() {
+        const components = [];
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('fingerprint', 2, 2);
+        components.push(canvas.toDataURL());
+
+        const gl = document.createElement('canvas').getContext('webgl');
+        if (gl) {
+          components.push(gl.getParameter(gl.VENDOR));
+          components.push(gl.getParameter(gl.RENDERER));
+        }
+
+        components.push(screen.width + 'x' + screen.height);
+        components.push(screen.colorDepth);
+        components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
+        components.push(navigator.language);
+        components.push(navigator.platform);
+
+        const data = components.join('|');
+        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+        return Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      async function checkFingerprint() {
+        try {
+          const currentFp = await generateFingerprint();
+          const stored = JSON.parse(localStorage.getItem('test11_fingerprints') || '[]');
+
+          const match = stored.find(item => item.hash === currentFp);
+          if (match) {
+            results.fingerprint = { success: true, method: 'fingerprint', hash: currentFp.slice(0, 16) + '...', matchedAt: match.timestamp };
+            setBadge('fingerprint', 'data', 'MATCH');
+            setData('fingerprint', results.fingerprint);
+            return true;
+          }
+
+          results.fingerprint = { success: false, hash: currentFp.slice(0, 16) + '...', storedCount: stored.length };
+          setBadge('fingerprint', 'failed', stored.length > 0 ? 'no match' : 'no data');
+          setData('fingerprint', results.fingerprint);
+          return false;
+        } catch (e) {
+          results.fingerprint = { success: false, error: e.message };
+          setBadge('fingerprint', 'failed', 'error');
+          setData('fingerprint', results.fingerprint);
+          return false;
+        }
+      }
+
       async function testStorageAccess() {
         const resultEl = document.getElementById('saa-result');
 
@@ -522,10 +634,14 @@ app.get("/", (c) => {
         await checkIndexedDB();
         await checkEtag();
         await checkCacheImg();
+        await checkServiceWorker();
+        await checkFingerprint();
         checkSAA();
 
         const allFlags = await readAllFlagsWithIDB();
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie || f.indexedDB);
+        const swSuccess = results.sw && results.sw.success;
+        const fpSuccess = results.fingerprint && results.fingerprint.success;
+        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie || f.indexedDB) || swSuccess || fpSuccess;
 
         const detectionEl = document.getElementById('detection');
         const titleEl = document.getElementById('detection-title');
@@ -534,11 +650,12 @@ app.get("/", (c) => {
         if (anySuccess) {
           const successMethods = Object.entries(allFlags)
             .filter(([k, v]) => v.localStorage || v.cookie || v.indexedDB)
-            .map(([k]) => k)
-            .join(', ');
+            .map(([k]) => k);
+          if (swSuccess) successMethods.push('service_worker');
+          if (fpSuccess) successMethods.push('fingerprint');
           detectionEl.className = 'detection detected';
           titleEl.textContent = 'User visited Landing!';
-          descEl.textContent = 'Working methods: ' + successMethods;
+          descEl.textContent = 'Working methods: ' + successMethods.join(', ');
         } else {
           detectionEl.className = 'detection not-detected';
           titleEl.textContent = 'No visit detected';
@@ -970,6 +1087,177 @@ app.get("/windowname-bounce", (c) => {
       } catch (e) {}
 
       window.name = '';
+    }
+
+    setTimeout(() => {
+      window.location.href = returnUrl;
+    }, 100);
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/sw.js", (c) => {
+	const sw = `
+const CACHE_NAME = 'tracker-v1';
+const FLAG_KEY = 'test10_serviceworker';
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
+self.addEventListener('message', async (event) => {
+  if (event.data && event.data.type === 'write_flag') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const response = new Response(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        source: event.data.source || 'unknown'
+      }));
+      await cache.put(FLAG_KEY, response);
+      event.ports[0].postMessage({ success: true, type: 'flag_written' });
+    } catch (e) {
+      event.ports[0].postMessage({ success: false, error: e.message, type: 'flag_error' });
+    }
+  }
+
+  if (event.data && event.data.type === 'read_flag') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const response = await cache.match(FLAG_KEY);
+      if (response) {
+        const data = await response.json();
+        event.ports[0].postMessage({ found: true, data, type: 'flag_read' });
+      } else {
+        event.ports[0].postMessage({ found: false, type: 'flag_read' });
+      }
+    } catch (e) {
+      event.ports[0].postMessage({ found: false, error: e.message, type: 'flag_error' });
+    }
+  }
+
+  if (event.data && event.data.type === 'clear_flag') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.delete(FLAG_KEY);
+      event.ports[0].postMessage({ success: true, type: 'flag_cleared' });
+    } catch (e) {
+      event.ports[0].postMessage({ success: false, error: e.message, type: 'flag_error' });
+    }
+  }
+});
+`;
+	return new Response(sw, {
+		headers: {
+			"Content-Type": "application/javascript",
+			"Cache-Control": "no-cache",
+		},
+	});
+});
+
+app.get("/sw-register", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SW Register</title>
+</head>
+<body>
+  <div id="status">Registering Service Worker...</div>
+  <script>
+    async function registerAndWrite() {
+      const status = document.getElementById('status');
+
+      if (!('serviceWorker' in navigator)) {
+        status.textContent = 'Service Worker not supported';
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'sw_error', error: 'not_supported' }, '*');
+        }
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        status.textContent = 'SW registered, waiting for activation...';
+
+        await navigator.serviceWorker.ready;
+        status.textContent = 'SW active, writing flag...';
+
+        const channel = new MessageChannel();
+        channel.port1.onmessage = (event) => {
+          if (event.data.success) {
+            status.textContent = 'Flag written successfully!';
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'sw_flag_set', success: true }, '*');
+            }
+          } else {
+            status.textContent = 'Flag write failed: ' + event.data.error;
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'sw_error', error: event.data.error }, '*');
+            }
+          }
+        };
+
+        registration.active.postMessage(
+          { type: 'write_flag', source: 'landing' },
+          [channel.port2]
+        );
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'sw_error', error: e.message }, '*');
+        }
+      }
+    }
+
+    registerAndWrite();
+  </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/fingerprint-bounce", (c) => {
+	const fp = c.req.query("fp") || "";
+	const returnUrl = c.req.query("return") || SITE_A_URL;
+	const timestamp = new Date().toISOString();
+
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting...</title>
+  <style>
+    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #000; color: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div>Storing fingerprint and redirecting back...</div>
+  <script>
+    const fp = '${fp}';
+    const timestamp = '${timestamp}';
+    const returnUrl = '${returnUrl}';
+
+    if (fp) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('test11_fingerprints') || '[]');
+        const exists = stored.some(item => item.hash === fp);
+        if (!exists) {
+          stored.push({ hash: fp, timestamp: timestamp });
+          localStorage.setItem('test11_fingerprints', JSON.stringify(stored));
+        }
+      } catch (e) {
+        console.error('Failed to store fingerprint:', e);
+      }
     }
 
     setTimeout(() => {

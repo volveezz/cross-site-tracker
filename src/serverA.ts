@@ -114,6 +114,22 @@ app.get("/", (c) => {
       <div id="cacheimg-status" class="status pending">Not run</div>
       <div id="cacheimg-data" class="result-data" style="display:none"></div>
     </div>
+
+    <div class="test" id="test-sw">
+      <h3>Service Worker</h3>
+      <p>Load iframe that registers SW on Game, writes flag to Cache API</p>
+      <button onclick="runServiceWorker()">Run</button>
+      <div id="sw-status" class="status pending">Not run</div>
+      <div id="sw-data" class="result-data" style="display:none"></div>
+    </div>
+
+    <div class="test" id="test-fingerprint">
+      <h3>Fingerprint</h3>
+      <p>Calculate browser fingerprint, redirect to Game to store it. Verifies same browser.</p>
+      <button onclick="runFingerprint()">Run</button>
+      <div id="fingerprint-status" class="status pending">Not run</div>
+      <div id="fingerprint-data" class="result-data" style="display:none"></div>
+    </div>
   </div>
 
   <script>
@@ -347,12 +363,85 @@ app.get("/", (c) => {
       }
     }
 
+    function runServiceWorker() {
+      return new Promise((resolve) => {
+        setStatus('sw', 'running', 'Loading iframe...');
+        const iframe = document.createElement('iframe');
+        iframe.src = SITE_X + '/sw-register';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const timeout = setTimeout(() => {
+          setStatus('sw', 'failed', 'Timeout - no response');
+          iframe.remove();
+          resolve({ success: false, error: 'timeout' });
+        }, 10000);
+
+        window.addEventListener('message', function handler(e) {
+          if (e.data && e.data.type === 'sw_flag_set') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('sw', 'success', 'Service Worker registered and flag written!', e.data);
+            iframe.remove();
+            resolve({ success: true, data: e.data });
+          }
+          if (e.data && e.data.type === 'sw_error') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('sw', 'failed', 'SW error: ' + e.data.error, e.data);
+            iframe.remove();
+            resolve({ success: false, error: e.data.error });
+          }
+        });
+      });
+    }
+
+    async function generateFingerprint() {
+      const components = [];
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('fingerprint', 2, 2);
+      components.push(canvas.toDataURL());
+
+      const gl = document.createElement('canvas').getContext('webgl');
+      if (gl) {
+        components.push(gl.getParameter(gl.VENDOR));
+        components.push(gl.getParameter(gl.RENDERER));
+      }
+
+      components.push(screen.width + 'x' + screen.height);
+      components.push(screen.colorDepth);
+      components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      components.push(navigator.language);
+      components.push(navigator.platform);
+
+      const data = components.join('|');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+      return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function runFingerprint() {
+      setStatus('fingerprint', 'running', 'Calculating fingerprint...');
+      try {
+        const fp = await generateFingerprint();
+        setStatus('fingerprint', 'running', 'Redirecting to store fingerprint...', { hash: fp.slice(0, 16) + '...' });
+        window.location.href = SITE_X + '/fingerprint-bounce?fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
+      } catch (e) {
+        setStatus('fingerprint', 'failed', 'Error: ' + e.message);
+      }
+    }
+
     async function runAllTests() {
       await runIframe();
       await runIndexedDB();
       await runPopup();
       await runCrossCookie();
       await runEtag();
+      await runServiceWorker();
       runCacheImg();
       runSAA();
     }
