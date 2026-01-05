@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 
 const SITE_X_URL = (process.env.SITE_X_URL || "http://localhost:3001").replace(/\/$/, "");
+const TRACKER_URL = (process.env.TRACKER_URL || "http://localhost:3002").replace(/\/$/, "");
 
 const app = new Hono();
 
@@ -42,7 +43,8 @@ app.get("/", (c) => {
 <body>
   <h1>Landing</h1>
   <div class="info">
-    <strong>Target:</strong> ${SITE_X_URL}<br>
+    <strong>Casino:</strong> ${SITE_X_URL}<br>
+    <strong>Tracker:</strong> ${TRACKER_URL}<br>
     <strong>Purpose:</strong> Set tracking flags that Casino can detect
   </div>
 
@@ -114,10 +116,18 @@ app.get("/", (c) => {
       <div id="fingerprint-status" class="status pending">Not run</div>
       <div id="fingerprint-data" class="result-data" style="display:none"></div>
     </div>
+
+    <div class="test" id="test-tracker" style="background: #1a0a2e; border-color: #4a1a7e;">
+      <h3>Central Tracker</h3>
+      <p>Redirect to Tracker server, register visit in Tracker's first-party storage</p>
+      <button onclick="runTracker()">Run</button>
+      <div id="tracker-status" class="status pending">Not run</div>
+    </div>
   </div>
 
   <script>
     const SITE_X = '${SITE_X_URL}';
+    const TRACKER = '${TRACKER_URL}';
 
     function setStatus(testName, status, message, data) {
       const statusEl = document.getElementById(testName + '-status');
@@ -385,6 +395,12 @@ app.get("/", (c) => {
       } catch (e) {
         setStatus('fingerprint', 'failed', 'Error: ' + e.message);
       }
+    }
+
+    async function runTracker() {
+      setStatus('tracker', 'running', 'Redirecting to Tracker...');
+      const fp = await generateFingerprint();
+      window.location.href = TRACKER + '/register?source=landing&fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
     }
 
     async function runAllTests() {

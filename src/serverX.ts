@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { html, raw } from "hono/html";
 
 const SITE_A_URL = (process.env.SITE_A_URL || "http://localhost:3000").replace(/\/$/, "");
+const TRACKER_URL = (process.env.TRACKER_URL || "http://localhost:3002").replace(/\/$/, "");
 
 const app = new Hono();
 
@@ -175,7 +176,8 @@ app.get("/tests", (c) => {
 	const content = html`
     <h1>Casino - Tests</h1>
     <div class="info">
-      <strong>Tracker:</strong> ${SITE_A_URL}<br>
+      <strong>Landing:</strong> ${SITE_A_URL}<br>
+      <strong>Tracker:</strong> ${TRACKER_URL}<br>
       <strong>Context:</strong> ${`\${window.self === window.top ? 'Direct visit' : 'Embedded (third-party)'}`}
     </div>
 
@@ -249,6 +251,15 @@ app.get("/tests", (c) => {
         </div>
         <div id="fingerprint-data" class="data" style="display:none"></div>
       </div>
+
+      <div class="test" style="background: #1a0a2e; border-color: #4a1a7e;">
+        <div class="test-header">
+          <span class="test-name">Central Tracker</span>
+          <span id="tracker-badge" class="badge badge-pending">-</span>
+        </div>
+        <div id="tracker-data" class="data" style="display:none"></div>
+        <button onclick="checkTracker()" style="margin-top: 8px;">Check Tracker</button>
+      </div>
     </div>
 
     <h3>Actions</h3>
@@ -262,6 +273,7 @@ app.get("/tests", (c) => {
 	const scripts = html`
     <script>
       const urlVia = '${via || ""}';
+      const TRACKER = '${TRACKER_URL}';
       const results = {};
       let swDetected = false;
       let swWorker = null;
@@ -501,7 +513,8 @@ app.get("/tests", (c) => {
         const allFlags = readAllFlags();
         const swSuccess = results.sw && results.sw.success;
         const fpSuccess = results.fingerprint && results.fingerprint.success;
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie) || swSuccess || fpSuccess;
+        const trackerSuccess = results.tracker && (results.tracker.found || results.tracker.fpMatch);
+        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie) || swSuccess || fpSuccess || trackerSuccess;
 
         const detectionEl = document.getElementById('detection');
         const titleEl = document.getElementById('detection-title');
@@ -513,6 +526,7 @@ app.get("/tests", (c) => {
             .map(([k]) => k);
           if (swSuccess) successMethods.push('service_worker');
           if (fpSuccess) successMethods.push('fingerprint');
+          if (trackerSuccess) successMethods.push('central_tracker');
           detectionEl.className = 'detection detected';
           titleEl.textContent = 'User visited Landing!';
           descEl.textContent = 'Working methods: ' + successMethods.join(', ');
@@ -530,6 +544,32 @@ app.get("/tests", (c) => {
         }, null, 2);
       }
 
+      function checkTrackerResult() {
+        const params = new URLSearchParams(window.location.search);
+        const trackerResult = params.get('tracker_result');
+        if (trackerResult) {
+          try {
+            const data = JSON.parse(trackerResult);
+            results.tracker = data;
+            if (data.found || data.fpMatch) {
+              setBadge('tracker', 'data', data.visits.length + ' visits');
+              setData('tracker', data);
+              return true;
+            }
+          } catch (e) {}
+        }
+        results.tracker = { success: false, checked: false };
+        setBadge('tracker', 'pending', 'not checked');
+        return false;
+      }
+
+      async function checkTracker() {
+        setBadge('tracker', 'pending', 'redirecting...');
+        const fp = await generateFingerprint();
+        const currentUrl = window.location.href.split('?')[0] + window.location.search.replace(/[&?]tracker_result=[^&]*/g, '');
+        window.location.href = TRACKER + '/check?fp=' + fp + '&return=' + encodeURIComponent(currentUrl);
+      }
+
       async function runAllChecks() {
         checkIframe();
         checkWindowName();
@@ -537,6 +577,7 @@ app.get("/tests", (c) => {
         checkCrossCookie();
         checkRedirect();
         checkSAA();
+        checkTrackerResult();
         updateDetectionBox();
 
         await Promise.all([checkServiceWorker(), checkFingerprint()]);

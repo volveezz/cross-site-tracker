@@ -5,8 +5,10 @@
 	"scripts": {
 		"dev:a": "bun run --watch src/devA.ts",
 		"dev:x": "bun run --watch src/devX.ts",
+		"dev:t": "bun run --watch src/devT.ts",
 		"start:a": "bun run src/devA.ts",
-		"start:x": "bun run src/devX.ts"
+		"start:x": "bun run src/devX.ts",
+		"start:t": "bun run src/devT.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",
