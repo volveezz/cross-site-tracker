@@ -213,6 +213,17 @@ app.get("/", (c) => {
     <script>
       const urlVia = '${via || ""}';
       const results = {};
+      let swDetected = false;
+      let swWorker = null;
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'sw_active') {
+            swDetected = true;
+            swWorker = event.source;
+          }
+        });
+      }
 
       function setBadge(testName, status, text) {
         const badge = document.getElementById(testName + '-badge');
@@ -315,6 +326,15 @@ app.get("/", (c) => {
         return false;
       }
 
+      async function querySWFlag(sw) {
+        const channel = new MessageChannel();
+        return new Promise((resolve) => {
+          channel.port1.onmessage = (event) => resolve(event.data);
+          sw.postMessage({ type: 'read_flag' }, [channel.port2]);
+          setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
+        });
+      }
+
       async function checkServiceWorker() {
         try {
           if (!('serviceWorker' in navigator)) {
@@ -326,27 +346,38 @@ app.get("/", (c) => {
 
           const controller = navigator.serviceWorker.controller;
           if (controller) {
-            const channel = new MessageChannel();
-            const response = await new Promise((resolve) => {
-              channel.port1.onmessage = (event) => resolve(event.data);
-              controller.postMessage({ type: 'read_flag' }, [channel.port2]);
-              setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
-            });
-
+            const response = await querySWFlag(controller);
             if (response.found) {
               results.sw = { success: true, method: 'service_worker', ...response.data };
               setBadge('sw', 'data', 'HAS DATA');
               setData('sw', results.sw);
               return true;
             }
-
             results.sw = { success: false, ...response };
             setBadge('sw', 'failed', 'no flag');
             setData('sw', results.sw);
             return false;
           }
 
-          results.sw = { success: false, error: 'No SW controlling this page' };
+          if (!swDetected) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+          if (swDetected && swWorker) {
+            const response = await querySWFlag(swWorker);
+            if (response.found) {
+              results.sw = { success: true, method: 'service_worker', ...response.data };
+              setBadge('sw', 'data', 'HAS DATA');
+              setData('sw', results.sw);
+              return true;
+            }
+            results.sw = { success: false, ...response };
+            setBadge('sw', 'failed', 'no flag');
+            setData('sw', results.sw);
+            return false;
+          }
+
+          results.sw = { success: false, error: 'No SW detected' };
           setBadge('sw', 'failed', 'no SW');
           setData('sw', results.sw);
           return false;
@@ -389,11 +420,10 @@ app.get("/", (c) => {
       async function checkFingerprint() {
         try {
           const currentFp = await generateFingerprint();
-          const stored = JSON.parse(localStorage.getItem('test11_fingerprints') || '[]');
+          const stored = JSON.parse(localStorage.getItem('fingerprints') || '[]');
 
-          const match = stored.find(item => item.hash === currentFp);
-          if (match) {
-            results.fingerprint = { success: true, method: 'fingerprint', hash: currentFp.slice(0, 16) + '...', matchedAt: match.timestamp };
+          if (stored.includes(currentFp)) {
+            results.fingerprint = { success: true, method: 'fingerprint', hash: currentFp.slice(0, 16) + '...' };
             setBadge('fingerprint', 'data', 'MATCH');
             setData('fingerprint', results.fingerprint);
             return true;
@@ -861,7 +891,25 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    clients.claim().then(() => {
+      return clients.matchAll({ type: 'window' }).then((allClients) => {
+        allClients.forEach((client) => {
+          client.postMessage({ type: 'sw_active', timestamp: new Date().toISOString() });
+        });
+      });
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.clientId) {
+    clients.get(event.clientId).then((client) => {
+      if (client) {
+        client.postMessage({ type: 'sw_active' });
+      }
+    });
+  }
 });
 
 self.addEventListener('message', async (event) => {
@@ -971,6 +1019,38 @@ app.get("/sw-register", (c) => {
 
     registerAndWrite();
   </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/fingerprint-receiver", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>FP</title></head>
+<body>
+<script>
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'fp_ready' }, '*');
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'store_fp') {
+      try {
+        const stored = JSON.parse(localStorage.getItem('fingerprints') || '[]');
+        if (!stored.includes(event.data.hash)) {
+          stored.push(event.data.hash);
+          localStorage.setItem('fingerprints', JSON.stringify(stored));
+        }
+        event.source.postMessage({ type: 'fp_stored' }, '*');
+      } catch (e) {
+        event.source.postMessage({ type: 'fp_error', error: e.message }, '*');
+      }
+    }
+  });
+</script>
 </body>
 </html>
 `;

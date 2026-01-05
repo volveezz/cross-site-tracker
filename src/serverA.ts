@@ -80,6 +80,7 @@ app.get("/", (c) => {
       <h3>Cross-Origin Cookie</h3>
       <p>Fetch request to Game with credentials, server sets cookie via Set-Cookie header</p>
       <button onclick="runCrossCookie()">Run</button>
+      <button onclick="checkCrossCookie()">Check</button>
       <div id="crosscookie-status" class="status pending">Not run</div>
       <div id="crosscookie-data" class="result-data" style="display:none"></div>
     </div>
@@ -101,7 +102,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-fingerprint">
       <h3>Fingerprint</h3>
-      <p>Calculate browser fingerprint, redirect to Game to store it. Verifies same browser.</p>
+      <p>Calculate browser fingerprint, store on Game via iframe. Verifies same browser.</p>
       <button onclick="runFingerprint()">Run</button>
       <div id="fingerprint-status" class="status pending">Not run</div>
       <div id="fingerprint-data" class="result-data" style="display:none"></div>
@@ -190,7 +191,9 @@ app.get("/", (c) => {
     }
 
     function openPopupWithGesture() {
-      popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300');
+      const left = screen.width - 420;
+      const top = screen.height - 320;
+      popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300,left=' + left + ',top=' + top);
       if (popupWindow) {
         setStatus('popup', 'running', 'Popup opened, waiting...');
         window.addEventListener('message', handlePopupMessage);
@@ -205,7 +208,9 @@ app.get("/", (c) => {
       return new Promise((resolve) => {
         popupResolve = resolve;
         setStatus('popup', 'running', 'Opening popup...');
-        popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300');
+        const left = screen.width - 420;
+        const top = screen.height - 320;
+        popupWindow = window.open(SITE_X + '/receiver', 'siteX', 'width=400,height=300,left=' + left + ',top=' + top);
 
         if (!popupWindow || popupWindow.closed) {
           const btn = document.createElement('button');
@@ -243,20 +248,27 @@ app.get("/", (c) => {
     }
 
     async function runCrossCookie() {
-      setStatus('crosscookie', 'running', 'Checking for existing cookie...');
+      setStatus('crosscookie', 'running', 'Setting cookie...');
       try {
-        const checkRes = await fetch(SITE_X + '/track-verify', { credentials: 'include' });
-        const checkData = await checkRes.json();
-
-        if (checkData.cookieReceived) {
-          setStatus('crosscookie', 'success', 'Cookie found from previous visit!', checkData);
-        } else {
-          setStatus('crosscookie', 'running', 'No cookie found, setting for next visit...');
-          await fetch(SITE_X + '/track', { credentials: 'include' });
-          setStatus('crosscookie', 'failed', 'No previous visit detected. Cookie set for future.', checkData);
-        }
+        await fetch(SITE_X + '/track', { credentials: 'include' });
+        setStatus('crosscookie', 'success', 'Cookie set!');
       } catch (e) {
         setStatus('crosscookie', 'failed', 'Request failed: ' + e.message);
+      }
+    }
+
+    async function checkCrossCookie() {
+      setStatus('crosscookie', 'running', 'Checking...');
+      try {
+        const res = await fetch(SITE_X + '/track-verify', { credentials: 'include' });
+        const data = await res.json();
+        if (data.cookieReceived) {
+          setStatus('crosscookie', 'success', 'Cookie found!', data);
+        } else {
+          setStatus('crosscookie', 'failed', 'No cookie', data);
+        }
+      } catch (e) {
+        setStatus('crosscookie', 'failed', 'Error: ' + e.message);
       }
     }
 
@@ -330,8 +342,35 @@ app.get("/", (c) => {
       setStatus('fingerprint', 'running', 'Calculating fingerprint...');
       try {
         const fp = await generateFingerprint();
-        setStatus('fingerprint', 'running', 'Redirecting to store fingerprint...', { hash: fp.slice(0, 16) + '...' });
-        window.location.href = SITE_X + '/fingerprint-bounce?fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
+        setStatus('fingerprint', 'running', 'Storing on Game via iframe...', { hash: fp.slice(0, 16) + '...' });
+
+        const iframe = document.createElement('iframe');
+        iframe.src = SITE_X + '/fingerprint-receiver';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const timeout = setTimeout(() => {
+          setStatus('fingerprint', 'failed', 'Timeout');
+          iframe.remove();
+        }, 5000);
+
+        window.addEventListener('message', function handler(e) {
+          if (e.data && e.data.type === 'fp_ready') {
+            iframe.contentWindow.postMessage({ type: 'store_fp', hash: fp }, '*');
+          }
+          if (e.data && e.data.type === 'fp_stored') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('fingerprint', 'success', 'Fingerprint stored on Game', { hash: fp.slice(0, 16) + '...' });
+            iframe.remove();
+          }
+          if (e.data && e.data.type === 'fp_error') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            setStatus('fingerprint', 'failed', 'Storage error: ' + e.data.error);
+            iframe.remove();
+          }
+        });
       } catch (e) {
         setStatus('fingerprint', 'failed', 'Error: ' + e.message);
       }
