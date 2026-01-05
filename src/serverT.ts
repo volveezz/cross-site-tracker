@@ -171,11 +171,13 @@ app.get("/iframe-check", (c) => {
 </head>
 <body>
   <script>
-    let result = { found: false, visits: [], error: null };
+    let result = { found: false, visits: [], fps: [], error: null };
 
     try {
       const visits = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '[]');
+      const fps = JSON.parse(localStorage.getItem('${FP_KEY}') || '[]');
       result.visits = visits;
+      result.fps = fps;
       result.found = visits.length > 0;
     } catch (e) {
       result.error = e.message;
