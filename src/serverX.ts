@@ -181,6 +181,7 @@ app.get("/", (c) => {
           <span class="test-name">Service Worker</span>
           <span id="sw-badge" class="badge badge-pending">checking</span>
         </div>
+        <button onclick="checkServiceWorkerManual()" style="margin-top:8px">Check SW</button>
         <div id="sw-data" class="data" style="display:none"></div>
       </div>
 
@@ -324,16 +325,19 @@ app.get("/", (c) => {
             return false;
           }
 
-          const registration = await navigator.serviceWorker.getRegistration();
-          if (!registration) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          const controller = navigator.serviceWorker.controller;
+
+          if (registrations.length === 0 && !controller) {
             results.sw = { success: false, error: 'No SW registered' };
             setBadge('sw', 'failed', 'no SW');
             setData('sw', results.sw);
             return false;
           }
 
-          await navigator.serviceWorker.ready;
-          const activeWorker = registration.active || navigator.serviceWorker.controller;
+          const registration = registrations[0] || await navigator.serviceWorker.ready;
+          const activeWorker = registration.active || controller;
+
           if (!activeWorker) {
             results.sw = { success: false, error: 'SW not active' };
             setBadge('sw', 'failed', 'not active');
@@ -470,6 +474,59 @@ app.get("/", (c) => {
           allFlags: allFlags,
           inIframe: window.self !== window.top
         }, null, 2);
+      }
+
+      async function checkServiceWorkerManual() {
+        setBadge('sw', 'pending', 'checking...');
+        try {
+          if (!('serviceWorker' in navigator)) {
+            results.sw = { success: false, error: 'SW not supported' };
+            setBadge('sw', 'failed', 'not supported');
+            setData('sw', results.sw);
+            return;
+          }
+
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          const controller = navigator.serviceWorker.controller;
+
+          if (registrations.length === 0 && !controller) {
+            results.sw = { success: false, error: 'No SW registered', registrations: 0, hasController: false };
+            setBadge('sw', 'failed', 'no SW');
+            setData('sw', results.sw);
+            return;
+          }
+
+          const registration = registrations[0] || await navigator.serviceWorker.ready;
+          const activeWorker = registration.active || controller;
+
+          if (!activeWorker) {
+            results.sw = { success: false, error: 'SW not active', scope: registration.scope };
+            setBadge('sw', 'failed', 'not active');
+            setData('sw', results.sw);
+            return;
+          }
+
+          const channel = new MessageChannel();
+          const response = await new Promise((resolve) => {
+            channel.port1.onmessage = (event) => resolve(event.data);
+            activeWorker.postMessage({ type: 'read_flag' }, [channel.port2]);
+            setTimeout(() => resolve({ found: false, error: 'timeout' }), 3000);
+          });
+
+          if (response.found) {
+            results.sw = { success: true, method: 'service_worker', scope: registration.scope, ...response.data };
+            setBadge('sw', 'data', 'HAS DATA');
+          } else {
+            results.sw = { success: false, scope: registration.scope, ...response };
+            setBadge('sw', 'failed', 'no flag');
+          }
+          setData('sw', results.sw);
+          updateDetection();
+        } catch (e) {
+          results.sw = { success: false, error: e.message };
+          setBadge('sw', 'failed', 'error');
+          setData('sw', results.sw);
+        }
       }
 
       async function checkCrossCookieManual() {
