@@ -11,6 +11,7 @@ app.get("/", (c) => {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Landing</title>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
@@ -30,6 +31,12 @@ app.get("/", (c) => {
     a { color: #8ab4f8; }
     .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
     .result-data { font-family: monospace; font-size: 12px; background: #0a0a0a; padding: 8px; margin-top: 8px; white-space: pre-wrap; border: 1px solid #222; color: #aaa; }
+    @media (max-width: 600px) {
+      body { margin: 20px auto; }
+      .run-all { width: 100%; }
+      button { padding: 12px 16px; }
+      .result-data { font-size: 11px; word-break: break-all; }
+    }
   </style>
 </head>
 <body>
@@ -94,7 +101,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-sw">
       <h3>Service Worker</h3>
-      <p>Load iframe that registers SW on Game, writes flag to Cache API</p>
+      <p>Register SW on Game via iframe, write flag to Cache API</p>
       <button onclick="runServiceWorker()">Run</button>
       <div id="sw-status" class="status pending">Not run</div>
       <div id="sw-data" class="result-data" style="display:none"></div>
@@ -342,7 +349,7 @@ app.get("/", (c) => {
       setStatus('fingerprint', 'running', 'Calculating fingerprint...');
       try {
         const fp = await generateFingerprint();
-        setStatus('fingerprint', 'running', 'Storing on Game via iframe...', { hash: fp.slice(0, 16) + '...' });
+        setStatus('fingerprint', 'running', 'Storing on Game via iframe...', { hash: fp });
 
         const iframe = document.createElement('iframe');
         iframe.src = SITE_X + '/fingerprint-receiver';
@@ -361,7 +368,7 @@ app.get("/", (c) => {
           if (e.data && e.data.type === 'fp_stored') {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
-            setStatus('fingerprint', 'success', 'Fingerprint stored on Game', { hash: fp.slice(0, 16) + '...' });
+            setStatus('fingerprint', 'success', 'Fingerprint stored on Game', { hash: fp });
             iframe.remove();
           }
           if (e.data && e.data.type === 'fp_error') {
@@ -381,9 +388,92 @@ app.get("/", (c) => {
       await runPopup();
       await runCrossCookie();
       await runServiceWorker();
+      await runFingerprint();
       runSAA();
     }
   </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/landing-sw.js", (c) => {
+	const sw = `
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (url.pathname === '/sw-ping') {
+    event.respondWith(new Response(JSON.stringify({ swActive: true, timestamp: Date.now() }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Landing-SW': '1',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'X-Landing-SW'
+      }
+    }));
+    return;
+  }
+});
+`;
+	return new Response(sw, {
+		headers: {
+			"Content-Type": "application/javascript",
+			"Cache-Control": "no-cache",
+		},
+	});
+});
+
+app.get("/sw-ping", (c) => {
+	return new Response(JSON.stringify({ swActive: false }), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Expose-Headers": "X-Landing-SW",
+		},
+	});
+});
+
+app.options("/sw-ping", (c) => {
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Methods": "GET, OPTIONS",
+			"Access-Control-Expose-Headers": "X-Landing-SW",
+		},
+	});
+});
+
+app.get("/sw-check", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head><title>SW Check</title></head>
+<body>
+<script>
+async function checkSW() {
+  try {
+    const res = await fetch('/sw-ping');
+    const hasHeader = res.headers.get('X-Landing-SW') === '1';
+    const data = await res.json();
+
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'landing_sw_check',
+        swActive: hasHeader || data.swActive,
+        method: hasHeader ? 'header' : (data.swActive ? 'response' : 'none')
+      }, '*');
+    }
+  } catch (e) {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'landing_sw_check', swActive: false, error: e.message }, '*');
+    }
+  }
+}
+checkSW();
+</script>
 </body>
 </html>
 `;

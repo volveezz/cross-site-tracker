@@ -7,7 +7,7 @@ const app = new Hono();
 
 const storageScript = `
 <script>
-  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test10_serviceworker', 'test11_fingerprint'];
+  const TESTS = ['test2_iframe', 'test3_windowname', 'test4_popup', 'test5_crosscookie', 'test6_redirect', 'test_saa', 'test10_serviceworker', 'test11_fingerprint'];
 
   function setCookie(name, value) {
     document.cookie = name + '=' + value + '; SameSite=None; Secure; path=/; max-age=31536000';
@@ -79,6 +79,7 @@ const layout = (content: string, scripts: string = "") => `
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
@@ -101,6 +102,12 @@ const layout = (content: string, scripts: string = "") => `
     a { color: #8ab4f8; }
     .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
     .saa-section { margin-top: 20px; padding: 16px; background: #111; border: 1px solid #333; }
+    @media (max-width: 600px) {
+      body { margin: 20px auto; }
+      .test-header { flex-wrap: wrap; gap: 8px; }
+      button { padding: 12px 16px; margin-bottom: 8px; }
+      .data { font-size: 11px; word-break: break-all; }
+    }
   </style>
 </head>
 <body>
@@ -122,7 +129,7 @@ app.get("/", (c) => {
     </div>
 
     <div id="detection" class="detection not-detected">
-      <h2 id="detection-title">Checking...</h2>
+      <h2 id="detection-title">-</h2>
       <p id="detection-desc"></p>
     </div>
 
@@ -131,7 +138,7 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">Iframe</span>
-          <span id="iframe-badge" class="badge badge-pending">checking</span>
+          <span id="iframe-badge" class="badge badge-pending">-</span>
         </div>
         <div id="iframe-data" class="data" style="display:none"></div>
       </div>
@@ -139,7 +146,7 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">window.name</span>
-          <span id="windowname-badge" class="badge badge-pending">checking</span>
+          <span id="windowname-badge" class="badge badge-pending">-</span>
         </div>
         <div id="windowname-data" class="data" style="display:none"></div>
       </div>
@@ -147,7 +154,7 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">Popup</span>
-          <span id="popup-badge" class="badge badge-pending">checking</span>
+          <span id="popup-badge" class="badge badge-pending">-</span>
         </div>
         <div id="popup-data" class="data" style="display:none"></div>
       </div>
@@ -155,14 +162,15 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">Storage Access API</span>
-          <span id="saa-badge" class="badge badge-pending">N/A (not in iframe)</span>
+          <span id="saa-badge" class="badge badge-pending">-</span>
         </div>
+        <div id="saa-data" class="data" style="display:none"></div>
       </div>
 
       <div class="test">
         <div class="test-header">
           <span class="test-name">Cross-Origin Cookie</span>
-          <span id="crosscookie-badge" class="badge badge-pending">checking</span>
+          <span id="crosscookie-badge" class="badge badge-pending">-</span>
         </div>
         <div id="crosscookie-data" class="data" style="display:none"></div>
       </div>
@@ -170,7 +178,7 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">Redirect Bounce</span>
-          <span id="redirect-badge" class="badge badge-pending">checking</span>
+          <span id="redirect-badge" class="badge badge-pending">-</span>
         </div>
         <div id="redirect-data" class="data" style="display:none"></div>
       </div>
@@ -178,16 +186,15 @@ app.get("/", (c) => {
       <div class="test">
         <div class="test-header">
           <span class="test-name">Service Worker</span>
-          <span id="sw-badge" class="badge badge-pending">checking</span>
+          <span id="sw-badge" class="badge badge-pending">-</span>
         </div>
-        <button onclick="checkServiceWorkerManual()" style="margin-top:8px">Check SW</button>
         <div id="sw-data" class="data" style="display:none"></div>
       </div>
 
       <div class="test">
         <div class="test-header">
           <span class="test-name">Fingerprint</span>
-          <span id="fingerprint-badge" class="badge badge-pending">checking</span>
+          <span id="fingerprint-badge" class="badge badge-pending">-</span>
         </div>
         <div id="fingerprint-data" class="data" style="display:none"></div>
       </div>
@@ -289,12 +296,15 @@ app.get("/", (c) => {
       }
 
       function checkSAA() {
-        const inIframe = window.self !== window.top;
-        if (!inIframe) {
-          results.saa = { success: false, reason: 'not in iframe' };
-          setBadge('saa', 'pending', 'N/A');
-          return false;
+        const flags = readFlag('test_saa');
+        if (flags.localStorage || flags.cookie) {
+          results.saa = { success: true, ...flags };
+          setBadge('saa', 'data', 'HAS DATA');
+          setData('saa', results.saa);
+          return true;
         }
+        results.saa = { success: false };
+        setBadge('saa', 'failed', 'no data');
         return false;
       }
 
@@ -336,57 +346,30 @@ app.get("/", (c) => {
       }
 
       async function checkServiceWorker() {
-        try {
-          if (!('serviceWorker' in navigator)) {
-            results.sw = { success: false, error: 'SW not supported' };
-            setBadge('sw', 'failed', 'not supported');
-            setData('sw', results.sw);
-            return false;
-          }
-
-          const controller = navigator.serviceWorker.controller;
-          if (controller) {
-            const response = await querySWFlag(controller);
-            if (response.found) {
-              results.sw = { success: true, method: 'service_worker', ...response.data };
-              setBadge('sw', 'data', 'HAS DATA');
-              setData('sw', results.sw);
-              return true;
-            }
-            results.sw = { success: false, ...response };
-            setBadge('sw', 'failed', 'no flag');
-            setData('sw', results.sw);
-            return false;
-          }
-
-          if (!swDetected) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-
-          if (swDetected && swWorker) {
-            const response = await querySWFlag(swWorker);
-            if (response.found) {
-              results.sw = { success: true, method: 'service_worker', ...response.data };
-              setBadge('sw', 'data', 'HAS DATA');
-              setData('sw', results.sw);
-              return true;
-            }
-            results.sw = { success: false, ...response };
-            setBadge('sw', 'failed', 'no flag');
-            setData('sw', results.sw);
-            return false;
-          }
-
-          results.sw = { success: false, error: 'No SW detected' };
-          setBadge('sw', 'failed', 'no SW');
-          setData('sw', results.sw);
-          return false;
-        } catch (e) {
-          results.sw = { success: false, error: e.message };
-          setBadge('sw', 'failed', 'error');
-          setData('sw', results.sw);
+        if (!('serviceWorker' in navigator)) {
+          results.sw = { success: false };
+          setBadge('sw', 'failed', 'no data');
           return false;
         }
+
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg || !reg.active) {
+          results.sw = { success: false };
+          setBadge('sw', 'failed', 'no data');
+          return false;
+        }
+
+        const response = await querySWFlag(reg.active);
+        if (response.found) {
+          results.sw = { success: true, ...response.data };
+          setBadge('sw', 'data', 'HAS DATA');
+          setData('sw', results.sw);
+          return true;
+        }
+
+        results.sw = { success: false };
+        setBadge('sw', 'failed', 'no data');
+        return false;
       }
 
       async function generateFingerprint() {
@@ -420,16 +403,16 @@ app.get("/", (c) => {
       async function checkFingerprint() {
         try {
           const currentFp = await generateFingerprint();
-          const stored = JSON.parse(localStorage.getItem('fingerprints') || '[]');
+          const stored = JSON.parse(localStorage.getItem('test11_fingerprint') || '[]');
 
           if (stored.includes(currentFp)) {
-            results.fingerprint = { success: true, method: 'fingerprint', hash: currentFp.slice(0, 16) + '...' };
+            results.fingerprint = { success: true, hash: currentFp };
             setBadge('fingerprint', 'data', 'MATCH');
             setData('fingerprint', results.fingerprint);
             return true;
           }
 
-          results.fingerprint = { success: false, hash: currentFp.slice(0, 16) + '...', storedCount: stored.length };
+          results.fingerprint = { success: false, hash: currentFp, storedCount: stored.length };
           setBadge('fingerprint', 'failed', stored.length > 0 ? 'no match' : 'no data');
           setData('fingerprint', results.fingerprint);
           return false;
@@ -493,22 +476,7 @@ app.get("/", (c) => {
         }, null, 2);
       }
 
-      async function checkServiceWorkerManual() {
-        setBadge('sw', 'pending', 'checking...');
-        await checkServiceWorker();
-        updateDetection();
-      }
-
-      async function runAllChecks() {
-        checkIframe();
-        checkWindowName();
-        checkPopup();
-        checkCrossCookie();
-        checkRedirect();
-        await checkServiceWorker();
-        await checkFingerprint();
-        checkSAA();
-
+      function updateDetectionBox() {
         const allFlags = readAllFlags();
         const swSuccess = results.sw && results.sw.success;
         const fpSuccess = results.fingerprint && results.fingerprint.success;
@@ -530,7 +498,7 @@ app.get("/", (c) => {
         } else {
           detectionEl.className = 'detection not-detected';
           titleEl.textContent = 'No visit detected';
-          descEl.textContent = 'No tracking data found.';
+          descEl.textContent = '';
         }
 
         document.getElementById('raw-data').textContent = JSON.stringify({
@@ -539,8 +507,19 @@ app.get("/", (c) => {
           allFlags: allFlags,
           inIframe: window.self !== window.top
         }, null, 2);
+      }
 
-        console.log('Detection results:', results);
+      async function runAllChecks() {
+        checkIframe();
+        checkWindowName();
+        checkPopup();
+        checkCrossCookie();
+        checkRedirect();
+        checkSAA();
+        updateDetectionBox();
+
+        await Promise.all([checkServiceWorker(), checkFingerprint()]);
+        updateDetectionBox();
       }
 
       runAllChecks();
@@ -717,14 +696,14 @@ app.get("/embed", (c) => {
         await document.requestStorageAccess();
         log('Access granted!');
         accessStatus.className = 'status success';
-        accessStatus.textContent = 'Access granted! Re-checking storage...';
+        accessStatus.textContent = 'Access granted! Writing flag...';
 
+        writeFlag('test_saa');
         const allFlags = readAllFlags();
         log('Storage after access: ' + JSON.stringify(allFlags));
         storageStatus.innerHTML = '<pre>' + JSON.stringify(allFlags, null, 2) + '</pre>';
 
-        const anySuccess = Object.values(allFlags).some(f => f.localStorage || f.cookie);
-        notifyParent(anySuccess, anySuccess ? 'Access granted, flags found' : 'Access granted, no flags');
+        notifyParent(true, 'Access granted, flag written');
       } catch (e) {
         log('Access denied: ' + e.message);
         accessStatus.className = 'status failed';
@@ -1039,10 +1018,10 @@ app.get("/fingerprint-receiver", (c) => {
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'store_fp') {
       try {
-        const stored = JSON.parse(localStorage.getItem('fingerprints') || '[]');
+        const stored = JSON.parse(localStorage.getItem('test11_fingerprint') || '[]');
         if (!stored.includes(event.data.hash)) {
           stored.push(event.data.hash);
-          localStorage.setItem('fingerprints', JSON.stringify(stored));
+          localStorage.setItem('test11_fingerprint', JSON.stringify(stored));
         }
         event.source.postMessage({ type: 'fp_stored' }, '*');
       } catch (e) {
