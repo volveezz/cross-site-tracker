@@ -47,7 +47,10 @@ app.get("/", (c) => {
   </div>
 
   <button class="run-all" onclick="runAllTests()">Run All Tests</button>
-  <p><a href="${SITE_X_URL}" target="_blank">Open Game to check results</a></p>
+  <p>
+    <a href="${SITE_X_URL}" target="_blank">Open Game to check results</a> |
+    <a href="/framed-tests">View Game in frame (third-party context)</a>
+  </p>
 
   <div class="tests">
     <div class="test" id="test-iframe">
@@ -478,6 +481,36 @@ async function checkSW() {
 }
 checkSW();
 </script>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
+app.get("/framed-tests", (c) => {
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game (Third-Party Context)</title>
+  <style>
+    body { background: #000; color: #fff; font-family: system-ui; padding: 20px; margin: 0; }
+    h1 { margin: 0 0 8px 0; }
+    p { color: #888; margin: 0 0 16px 0; }
+    a { color: #8ab4f8; }
+    iframe { width: 100%; height: calc(100vh - 120px); border: 2px solid #333; background: #111; }
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      iframe { height: calc(100vh - 100px); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Game (embedded in Landing)</h1>
+  <p>Same tests, but Game is now third-party. Storage partition: (Game, Landing) vs (Game, Game). <a href="/">Back to Landing</a></p>
+  <iframe src="${SITE_X_URL}/"></iframe>
 </body>
 </html>
 `;
