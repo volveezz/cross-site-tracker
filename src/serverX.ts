@@ -428,19 +428,19 @@ app.get("/", (c) => {
         const resultEl = document.getElementById('saa-result');
 
         if (!document.requestStorageAccess) {
-          resultEl.textContent = 'Storage Access API not supported in this browser';
+          resultEl.textContent = 'Storage Access API not supported';
           return;
         }
 
         try {
           const hasAccess = await document.hasStorageAccess();
-          resultEl.textContent = 'Current access: ' + hasAccess;
-
           if (!hasAccess) {
             await document.requestStorageAccess();
-            resultEl.textContent = 'Access granted! Reloading...';
-            setTimeout(() => location.reload(), 500);
           }
+          writeFlag('test_saa');
+          checkSAA();
+          resultEl.textContent = 'Access granted, flag written';
+          updateDetectionBox();
         } catch (e) {
           resultEl.textContent = 'Error: ' + e.message;
         }
