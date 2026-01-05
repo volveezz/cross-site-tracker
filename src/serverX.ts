@@ -101,7 +101,6 @@ const layout = (content: string, scripts: string = "") => `
     button:hover { background: #333; }
     a { color: #8ab4f8; }
     .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
-    .saa-section { margin-top: 20px; padding: 16px; background: #111; border: 1px solid #333; }
     @media (max-width: 600px) {
       body { margin: 20px auto; }
       .test-header { flex-wrap: wrap; gap: 8px; }
@@ -198,13 +197,6 @@ app.get("/", (c) => {
         </div>
         <div id="fingerprint-data" class="data" style="display:none"></div>
       </div>
-    </div>
-
-    <div class="saa-section">
-      <h3>Storage Access API Test</h3>
-      <p>Click to request storage access (simulates iframe context):</p>
-      <button onclick="testStorageAccess()">Request Storage Access</button>
-      <div id="saa-result"></div>
     </div>
 
     <h3>Actions</h3>
@@ -421,28 +413,6 @@ app.get("/", (c) => {
           setBadge('fingerprint', 'failed', 'error');
           setData('fingerprint', results.fingerprint);
           return false;
-        }
-      }
-
-      async function testStorageAccess() {
-        const resultEl = document.getElementById('saa-result');
-
-        if (!document.requestStorageAccess) {
-          resultEl.textContent = 'Storage Access API not supported';
-          return;
-        }
-
-        try {
-          const hasAccess = await document.hasStorageAccess();
-          if (!hasAccess) {
-            await document.requestStorageAccess();
-          }
-          writeFlag('test_saa');
-          checkSAA();
-          resultEl.textContent = 'Access granted, flag written';
-          updateDetectionBox();
-        } catch (e) {
-          resultEl.textContent = 'Error: ' + e.message;
         }
       }
 
