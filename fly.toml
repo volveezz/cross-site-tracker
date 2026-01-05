@@ -1,0 +1,18 @@
+app = 'cross-site-tracker'
+primary_region = 'ams'
+
+[env]
+  SITE_X_URL = "https://korenev-dev-user-tracker-a.7b49r5.easypanel.host"
+  TRACKER_URL = "https://cross-site-tracker.vercel.app"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
