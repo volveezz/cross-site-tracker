@@ -6,13 +6,21 @@ Detects if user visited Landing before going to Casino.
 
 ## Architecture
 
-- **Landing** (port 3000) - Multiple WRITE methods to register visits with Tracker
-- **Tracker** (port 3002) - Central storage using browser localStorage
-- **Casino** (port 3001) - ONE READ to detect if user came from Landing
+- **siteA** (Landing) - Controlled. Redirects user to siteX to set tracking cookie.
+- **siteX** (Game Provider) - Controlled. Embedded as iframe in both siteA and siteB. Sets/reads cookies.
+- **siteB** (Casino) - NOT controlled. Just embeds siteX iframe.
+
+**Flow:**
+1. User visits siteA (Landing)
+2. siteA redirects user to siteX/register → siteX sets cookie (first-party context)
+3. User returns to siteA, later visits siteB (Casino)
+4. siteB embeds siteX iframe → browser sends siteX cookie with request
+5. siteX server reads cookie from request headers → knows user was tracked
 
 ## Key Points
 
-- Client-side only (localStorage)
+- **CLIENT-SIDE ONLY** - NO server-side storage, NO databases, NO Redis. localStorage/cookies ONLY.
+- Casino script runs inside iframe on third-party sites - NO redirects, NO popups possible
 - Landing tests multiple tracking methods (iframe, popup, redirect, etc.)
 - Casino does ONE check to see all tracking data
 - On localhost: no storage partitioning, all methods work

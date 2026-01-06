@@ -15,41 +15,32 @@ app.get("/", (c) => {
   <title>Casino</title>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
-    h1 { color: #fff; margin-bottom: 20px; }
+    h1 { color: #fff; }
     .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
-    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #1a73e8; color: white; border: none; }
-    .btn:hover { background: #1557b0; }
+    .sections { display: grid; gap: 16px; }
+    .section { padding: 16px; background: #111; border: 1px solid #333; }
+    .section h3 { margin: 0 0 8px 0; color: #fff; }
+    .game-frame { width: 100%; height: 300px; border: none; background: #111; }
     a { color: #8ab4f8; }
-    .frame-container { margin-top: 20px; display: none; }
-    iframe { width: 100%; height: 70vh; border: 2px solid #333; background: #111; }
-    @media (max-width: 600px) {
-      body { margin: 20px auto; }
-      .btn { width: 100%; }
-      iframe { height: 60vh; }
-    }
   </style>
 </head>
 <body>
   <h1>Casino</h1>
   <div class="info">
     <strong>Tracker:</strong> ${TRACKER_URL}<br>
-    <strong>Purpose:</strong> Load tests iframe to detect if user visited Landing
+    <strong>Role:</strong> Third-party casino site embedding game provider
   </div>
 
-  <button class="btn" onclick="loadTests()">Load Tracking Tests</button>
-
-  <div id="frame-container" class="frame-container">
-    <iframe id="tests-frame"></iframe>
+  <div class="sections">
+    <div class="section">
+      <h3>Embedded Game</h3>
+      <iframe class="game-frame" src="${TRACKER_URL}/game"></iframe>
+    </div>
   </div>
 
-  <script>
-    function loadTests() {
-      const container = document.getElementById('frame-container');
-      const iframe = document.getElementById('tests-frame');
-      container.style.display = 'block';
-      iframe.src = '/tests';
-    }
-  </script>
+  <p style="margin-top: 20px;">
+    <a href="${TRACKER_URL}" target="_blank">Open Tracker</a>
+  </p>
 </body>
 </html>
 `;
@@ -65,8 +56,8 @@ app.get("/tests", (c) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Casino - Check</title>
   <style>
-    body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
-    h2 { color: #fff; margin: 0 0 16px 0; }
+    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
+    h1 { color: #fff; }
     .result { padding: 16px; margin-bottom: 16px; }
     .tracked { background: #0a2f0a; border: 2px solid #4caf50; }
     .not-tracked { background: #2f0a0a; border: 2px solid #f44336; }
@@ -87,7 +78,7 @@ app.get("/tests", (c) => {
   </style>
 </head>
 <body>
-  <h2>Tracking Check</h2>
+  <h1>Tracking Check</h1>
 
   <div id="result" class="result checking">
     <div class="result-title" id="result-title">Checking...</div>
@@ -109,8 +100,17 @@ app.get("/tests", (c) => {
     <button onclick="location.reload()">Refresh</button>
   </div>
 
+  <div id="saa-container" style="display:none; margin-top: 16px;">
+    <div class="section">
+      <div class="section-title">Manual Verification Required</div>
+      <p style="color: #aaa; margin: 8px 0;">Cookie check failed. Click below to verify via Storage Access.</p>
+      <iframe id="saa-iframe" style="width:100%; height:120px; border:1px solid #333; background:#111;"></iframe>
+    </div>
+  </div>
+
   <script>
     const TRACKER = '${TRACKER_URL}';
+    let currentFp = null;
 
     async function generateFingerprint() {
       const components = [];
@@ -146,31 +146,51 @@ app.get("/tests", (c) => {
 
       resultEl.className = 'result checking';
       titleEl.textContent = 'Checking...';
-      infoEl.textContent = 'Loading tracking data from Tracker';
+      infoEl.textContent = 'Checking cookie...';
 
-      const fp = await generateFingerprint();
+      currentFp = await generateFingerprint();
 
-      const iframe = document.createElement('iframe');
-      iframe.src = TRACKER + '/iframe-check';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
+      let hasCookie = false;
 
-      const timeout = setTimeout(() => {
-        iframe.remove();
-        showResult({ found: false, visits: [], fps: [], error: 'timeout' }, fp);
-      }, 5000);
+      // Check cookie (silent)
+      try {
+        const res = await fetch(TRACKER + '/track-verify', { credentials: 'include' });
+        const data = await res.json();
+        hasCookie = data.cookieReceived;
+      } catch {}
 
-      window.addEventListener('message', function handler(e) {
-        if (e.data && e.data.type === 'tracker_check_result') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-          iframe.remove();
-          showResult(e.data, fp);
-        }
-      });
+      // Always show SAA iframe to get full methods list
+      infoEl.textContent = hasCookie ? 'Cookie found, loading methods...' : 'Loading methods...';
+      showSAAIframe(hasCookie);
     }
 
-    function showResult(data, currentFp) {
+    let cookieFound = false;
+
+    function showSAAIframe(hasCookie) {
+      cookieFound = hasCookie;
+      const container = document.getElementById('saa-container');
+      const iframe = document.getElementById('saa-iframe');
+      container.style.display = 'block';
+      iframe.src = TRACKER + '/embed?fp=' + encodeURIComponent(currentFp);
+
+      window.addEventListener('message', handleSAAMessage);
+    }
+
+    function handleSAAMessage(e) {
+      if (e.data && e.data.type === 'saa_result') {
+        window.removeEventListener('message', handleSAAMessage);
+        document.getElementById('saa-container').style.display = 'none';
+
+        showResult({
+          found: e.data.found || cookieFound,
+          method: cookieFound ? 'cookie' : null,
+          fpMatch: e.data.fpMatch,
+          visits: e.data.visits
+        });
+      }
+    }
+
+    function showResult(data) {
       const resultEl = document.getElementById('result');
       const titleEl = document.getElementById('result-title');
       const infoEl = document.getElementById('result-info');
@@ -180,31 +200,37 @@ app.get("/tests", (c) => {
       const fpSection = document.getElementById('fp-section');
       const fpResult = document.getElementById('fp-result');
 
-      const fpMatch = data.fps && data.fps.includes(currentFp);
-      const tracked = data.found || fpMatch;
+      const tracked = data.found;
 
       resultEl.className = 'result ' + (tracked ? 'tracked' : 'not-tracked');
       titleEl.textContent = tracked ? 'User Tracked' : 'Not Tracked';
 
-      const methods = [...new Set(data.visits.map(v => v.method))];
-      infoEl.textContent = tracked
-        ? 'Methods: ' + methods.join(', ') + (fpMatch ? ' + fingerprint match' : '')
-        : 'No tracking data found';
+      // Show methods as badges
+      let methods = [];
+      if (data.method) methods.push(data.method);
+      if (data.visits && data.visits.length > 0) {
+        data.visits.forEach(v => {
+          const m = v.method || v.source || 'unknown';
+          if (!methods.includes(m)) methods.push(m);
+        });
+      }
+      if (data.fpMatch) methods.push('fingerprint');
 
-      if (data.visits.length > 0) {
-        visitsSection.style.display = 'block';
-        visitCount.textContent = data.visits.length;
-        visitsList.innerHTML = data.visits.map(v =>
-          '<div class="visit"><span class="visit-method">' + v.method + '</span> ' +
-          '<span class="visit-time">' + new Date(v.timestamp).toLocaleString() + '</span></div>'
+      if (methods.length > 0) {
+        infoEl.innerHTML = methods.map(m =>
+          '<span style="display:inline-block;padding:4px 10px;margin:2px;background:#0a2f0a;border:1px solid #4caf50;color:#4caf50;font-size:13px;">' + m + '</span>'
         ).join('');
+      } else {
+        infoEl.textContent = 'No tracking data found';
       }
 
+      visitsSection.style.display = 'none';
+
       fpSection.style.display = 'block';
-      fpResult.className = 'fp-status ' + (fpMatch ? 'fp-match' : 'fp-no-match');
-      fpResult.textContent = fpMatch
-        ? 'Fingerprint matches stored hash'
-        : 'Fingerprint not found in stored hashes';
+      fpResult.className = 'fp-status ' + (data.fpMatch ? 'fp-match' : 'fp-no-match');
+      fpResult.innerHTML = data.fpMatch
+        ? 'Fingerprint match: <span style="word-break:break-all;font-family:monospace;font-size:11px;">' + currentFp + '</span>'
+        : 'Fingerprint: <span style="word-break:break-all;font-family:monospace;font-size:11px;">' + (currentFp || 'N/A') + '</span>';
     }
 
     runCheck();

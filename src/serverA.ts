@@ -401,12 +401,26 @@ app.get("/", (c) => {
     }
 
     async function runAllTests() {
-      await runIframe();
-      await runPopup();
+      const results = [];
+
+      const iframe = await runIframe();
+      if (iframe.success) results.push('iframe');
+
+      const popup = await runPopup();
+      if (popup.success) results.push('popup');
+
       await runCrossCookie();
-      await runServiceWorker();
+
+      const sw = await runServiceWorker();
+      if (sw.success) results.push('serviceworker');
+
       await runFingerprint();
-      runSAA();
+
+      if (results.length > 0) {
+        const fp = await generateFingerprint();
+        const methods = results.join(',');
+        window.location.href = TRACKER + '/register?source=landing&methods=' + methods + '&fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
+      }
     }
   </script>
 </body>

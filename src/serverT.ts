@@ -7,6 +7,9 @@ const STORAGE_KEY = "tracker_visits";
 const FP_KEY = "tracker_fingerprints";
 
 app.get("/", (c) => {
+	const cookie = c.req.header("Cookie") || "";
+	const hasCookie = cookie.includes("tracker_cookie");
+
 	const page = html`
 <!DOCTYPE html>
 <html>
@@ -17,42 +20,73 @@ app.get("/", (c) => {
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
     h1 { color: #fff; }
-    .info { background: #1a0a2e; padding: 16px; margin-bottom: 20px; border: 1px solid #4a1a7e; }
-    pre { background: #0a0a0a; padding: 12px; font-size: 12px; overflow-x: auto; border: 1px solid #222; color: #aaa; white-space: pre-wrap; word-break: break-all; }
-    button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; }
+    .sections { display: grid; gap: 16px; }
+    .section { padding: 16px; background: #111; border: 1px solid #333; }
+    .section h3 { margin: 0 0 12px 0; color: #fff; }
+    .status { padding: 8px 12px; font-size: 14px; }
+    .success { background: #0a2f0a; color: #4caf50; }
+    .failed { background: #2f0a0a; color: #f44336; }
+    .method { display: inline-block; padding: 6px 12px; margin: 4px; background: #0a2f0a; border: 1px solid #4caf50; color: #4caf50; font-size: 13px; }
+    .method-none { background: #222; border-color: #444; color: #666; }
+    .fp { font-family: monospace; font-size: 11px; padding: 6px 10px; margin: 4px 0; background: #0a0a0a; border: 1px solid #333; color: #8ab4f8; word-break: break-all; }
+    button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; margin-top: 8px; }
     button:hover { background: #333; }
-    h3 { color: #fff; margin-top: 24px; }
   </style>
 </head>
 <body>
   <h1>Tracker</h1>
-  <div class="info">
-    <strong>Role:</strong> Central tracking server<br>
-    <strong>Purpose:</strong> Store visit data that Landing writes and Casino reads
+
+  <div class="sections">
+    <div class="section" style="background: ${hasCookie ? "#0a2f0a" : "#2f0a0a"}; border-color: ${hasCookie ? "#4caf50" : "#f44336"};">
+      <h3>Cookie</h3>
+      <div class="status ${hasCookie ? "success" : "failed"}">
+        ${hasCookie ? "Present" : "Not found"}
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Methods</h3>
+      <div id="methods"></div>
+    </div>
+
+    <div class="section">
+      <h3>Fingerprints</h3>
+      <div id="fingerprints"></div>
+    </div>
+
+    <div class="section">
+      <h3>Actions</h3>
+      <button onclick="clearData()">Clear All</button>
+      <button onclick="location.reload()">Refresh</button>
+    </div>
   </div>
-
-  <h3>Stored Data</h3>
-  <pre id="visits"></pre>
-
-  <h3>Stored Fingerprints</h3>
-  <pre id="fingerprints"></pre>
-
-  <h3>Actions</h3>
-  <button onclick="clearData()">Clear All Data</button>
-  <button onclick="location.reload()">Refresh</button>
 
   <script>
     function loadData() {
       const visits = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '[]');
       const fps = JSON.parse(localStorage.getItem('${FP_KEY}') || '[]');
-      document.getElementById('visits').textContent = JSON.stringify(visits, null, 2) || 'No visits recorded';
-      document.getElementById('fingerprints').textContent = JSON.stringify(fps, null, 2) || 'No fingerprints stored';
+
+      const methodsEl = document.getElementById('methods');
+      if (visits.length) {
+        const methods = [...new Set(visits.map(v => v.method || v.source || 'unknown'))];
+        methodsEl.innerHTML = methods.map(m => '<span class="method">' + m + '</span>').join('');
+      } else {
+        methodsEl.innerHTML = '<span class="method method-none">No visits</span>';
+      }
+
+      const fpsEl = document.getElementById('fingerprints');
+      if (fps.length) {
+        fpsEl.innerHTML = fps.map(f => '<div class="fp">' + f + '</div>').join('');
+      } else {
+        fpsEl.innerHTML = '<span class="method method-none">No fingerprints</span>';
+      }
     }
 
     function clearData() {
       localStorage.removeItem('${STORAGE_KEY}');
       localStorage.removeItem('${FP_KEY}');
-      loadData();
+      document.cookie = 'tracker_cookie=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      location.reload();
     }
 
     loadData();
@@ -63,10 +97,41 @@ app.get("/", (c) => {
 	return c.html(page.toString());
 });
 
+app.get("/game", (c) => {
+	const cookie = c.req.header("Cookie") || "";
+	const isTracked = cookie.includes("tracker_cookie");
+
+	const page = html`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tracker</title>
+  <style>
+    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
+    h1 { color: #fff; margin-bottom: 20px; }
+    .tracking-status { padding: 16px; font-size: 18px; font-weight: bold; text-align: center; }
+    .tracked { background: #0a2f0a; border: 2px solid #4caf50; color: #4caf50; }
+    .not-tracked { background: #2f0a0a; border: 2px solid #f44336; color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>Tracker</h1>
+  <div class="tracking-status ${isTracked ? "tracked" : "not-tracked"}">
+    ${isTracked ? "TRACKED" : "NOT TRACKED"}
+  </div>
+</body>
+</html>
+`;
+	return c.html(page.toString());
+});
+
 app.get("/register", (c) => {
 	const returnUrl = c.req.query("return") || "/";
 	const source = c.req.query("source") || "unknown";
 	const fp = c.req.query("fp") || "";
+	const methods = c.req.query("methods") || "";
 
 	const page = html`
 <!DOCTYPE html>
@@ -84,11 +149,19 @@ app.get("/register", (c) => {
     const source = '${source}';
     const returnUrl = '${returnUrl}';
     const fp = '${fp}';
+    const methodsParam = '${methods}';
     const timestamp = new Date().toISOString();
 
     try {
       const visits = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '[]');
-      visits.push({ source, timestamp, userAgent: navigator.userAgent.slice(0, 50) });
+
+      if (methodsParam) {
+        methodsParam.split(',').forEach(m => {
+          visits.push({ source, timestamp, method: m });
+        });
+      } else {
+        visits.push({ source, timestamp, method: 'redirect' });
+      }
       if (visits.length > 100) visits.shift();
       localStorage.setItem('${STORAGE_KEY}', JSON.stringify(visits));
 
@@ -110,7 +183,12 @@ app.get("/register", (c) => {
 </body>
 </html>
 `;
-	return c.html(page.toString());
+	return new Response(page.toString(), {
+		headers: {
+			"Content-Type": "text/html; charset=utf-8",
+			"Set-Cookie": `tracker_cookie=${Date.now()}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
+		},
+	});
 });
 
 app.get("/check", (c) => {
@@ -321,7 +399,12 @@ app.get("/windowname-bounce", (c) => {
 </body>
 </html>
 `;
-	return c.html(page.toString());
+	return new Response(page.toString(), {
+		headers: {
+			"Content-Type": "text/html; charset=utf-8",
+			"Set-Cookie": `tracker_cookie=${Date.now()}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
+		},
+	});
 });
 
 app.get("/bounce", (c) => {
@@ -345,36 +428,65 @@ app.get("/bounce", (c) => {
 </body>
 </html>
 `;
-	return c.html(page.toString());
+	return new Response(page.toString(), {
+		headers: {
+			"Content-Type": "text/html; charset=utf-8",
+			"Set-Cookie": `tracker_cookie=${Date.now()}; SameSite=None; Secure; Path=/; Max-Age=31536000`,
+		},
+	});
 });
 
 app.get("/embed", (c) => {
+	const fp = c.req.query("fp") || "";
 	const page = html`
 <!DOCTYPE html>
 <html>
 <head>
   <title>Tracker Embed</title>
   <style>
-    body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
-    .btn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #7c4dff; color: white; border: none; width: 100%; }
-    .status { padding: 12px; margin-top: 12px; }
+    body { font-family: system-ui; padding: 12px; margin: 0; background: #000; color: #e0e0e0; }
+    .btn { padding: 12px 24px; font-size: 14px; cursor: pointer; background: #7c4dff; color: white; border: none; width: 100%; }
+    .status { padding: 8px; margin-top: 8px; font-size: 12px; }
     .success { background: #0a2f0a; color: #4caf50; }
     .pending { background: #222; color: #888; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
-  <button class="btn" onclick="requestAccess()">Grant Storage Access</button>
-  <div id="status" class="status pending">Click button to grant access</div>
+  <button id="btn" class="btn hidden" onclick="requestAccess()">Verify Visit</button>
+  <div id="status" class="status pending">Checking...</div>
 
   <script>
     const STORAGE_KEY = '${STORAGE_KEY}';
+    const FP_KEY = '${FP_KEY}';
+    const providedFp = '${fp}';
+
+    function checkStorage() {
+      try {
+        const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const fps = JSON.parse(localStorage.getItem(FP_KEY) || '[]');
+        const fpMatch = providedFp && fps.includes(providedFp);
+        const found = visits.length > 0 || fpMatch;
+
+        if (found) {
+          document.getElementById('status').className = 'status success';
+          document.getElementById('status').textContent = 'Found: ' + visits.length + ' visits' + (fpMatch ? ' + fingerprint' : '');
+          window.parent.postMessage({ type: 'saa_result', found: true, fpMatch: fpMatch, visits: visits }, '*');
+          return;
+        }
+      } catch (e) {}
+
+      // No data found - show button for SAA
+      document.getElementById('btn').className = 'btn';
+      document.getElementById('status').textContent = 'Click to grant storage access';
+    }
 
     async function requestAccess() {
       const statusEl = document.getElementById('status');
 
       if (!document.requestStorageAccess) {
         statusEl.textContent = 'Storage Access API not supported';
-        window.parent.postMessage({ type: 'storage_access_result', success: false, message: 'API not supported' }, '*');
+        window.parent.postMessage({ type: 'saa_result', found: false, error: 'API not supported' }, '*');
         return;
       }
 
@@ -382,17 +494,23 @@ app.get("/embed", (c) => {
         await document.requestStorageAccess();
 
         const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        visits.push({ source: 'saa', timestamp: new Date().toISOString(), method: 'saa' });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+        const fps = JSON.parse(localStorage.getItem(FP_KEY) || '[]');
+        const fpMatch = providedFp && fps.includes(providedFp);
+        const found = visits.length > 0 || fpMatch;
 
         statusEl.className = 'status success';
-        statusEl.textContent = 'Access granted, visit recorded!';
-        window.parent.postMessage({ type: 'storage_access_result', success: true }, '*');
+        statusEl.textContent = found
+          ? 'Found: ' + visits.length + ' visits' + (fpMatch ? ' + fingerprint' : '')
+          : 'No tracking data found';
+
+        window.parent.postMessage({ type: 'saa_result', found: found, fpMatch: fpMatch, visits: visits }, '*');
       } catch (e) {
         statusEl.textContent = 'Denied: ' + e.message;
-        window.parent.postMessage({ type: 'storage_access_result', success: false, message: e.message }, '*');
+        window.parent.postMessage({ type: 'saa_result', found: false, error: e.message }, '*');
       }
     }
+
+    checkStorage();
   </script>
 </body>
 </html>
