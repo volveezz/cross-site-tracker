@@ -28,6 +28,12 @@ app.get("/", (c) => {
     .failed { background: #2f0a0a; color: #f44336; }
     .method { display: inline-block; padding: 6px 12px; margin: 4px; background: #0a2f0a; border: 1px solid #4caf50; color: #4caf50; font-size: 13px; }
     .method-none { background: #222; border-color: #444; color: #666; }
+    .badge { display: inline-block; padding: 4px 10px; margin: 2px; font-size: 12px; }
+    .badge-good { background: #0a2f0a; border: 1px solid #4caf50; color: #4caf50; }
+    .badge-bad { background: #2f0a0a; border: 1px solid #f44336; color: #f44336; }
+    .badge-warn { background: #2f2a0a; border: 1px solid #ff9800; color: #ff9800; }
+    .status-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #222; }
+    .status-row:last-child { border-bottom: none; }
     .fp { font-family: monospace; font-size: 11px; padding: 6px 10px; margin: 4px 0; background: #0a0a0a; border: 1px solid #333; color: #8ab4f8; word-break: break-all; }
     button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; margin-top: 8px; }
     button:hover { background: #333; }
@@ -57,6 +63,18 @@ app.get("/", (c) => {
     <div class="section">
       <h3>Service Worker</h3>
       <div id="sw-status"></div>
+    </div>
+
+    <div class="section">
+      <h3>Browser Status</h3>
+      <div class="status-row">
+        <span>Do Not Track</span>
+        <span id="dnt-status" class="badge badge-warn">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span>Storage Access API</span>
+        <span id="saa-perm" class="badge badge-warn">Checking...</span>
+      </div>
     </div>
 
     <div class="section">
@@ -109,6 +127,29 @@ app.get("/", (c) => {
         }
       } catch (e) {
         swEl.innerHTML = '<span class="method method-none">Error: ' + e.message + '</span>';
+      }
+
+      const dntEl = document.getElementById('dnt-status');
+      const dnt = navigator.doNotTrack;
+      if (dnt === '1') {
+        dntEl.textContent = 'Enabled';
+        dntEl.className = 'badge badge-bad';
+      } else if (dnt === '0') {
+        dntEl.textContent = 'Disabled';
+        dntEl.className = 'badge badge-good';
+      } else {
+        dntEl.textContent = 'Not set';
+        dntEl.className = 'badge badge-warn';
+      }
+
+      const saaEl = document.getElementById('saa-perm');
+      try {
+        const perm = await navigator.permissions.query({ name: 'storage-access' });
+        saaEl.textContent = perm.state.charAt(0).toUpperCase() + perm.state.slice(1);
+        saaEl.className = 'badge ' + (perm.state === 'granted' ? 'badge-good' : perm.state === 'denied' ? 'badge-bad' : 'badge-warn');
+      } catch {
+        saaEl.textContent = 'Not supported';
+        saaEl.className = 'badge badge-warn';
       }
     }
 

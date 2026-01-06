@@ -26,6 +26,12 @@ app.get("/", (c) => {
     .result-title { font-size: 24px; font-weight: bold; margin-bottom: 8px; }
     .result-info { font-size: 14px; color: #aaa; }
     .method { display: inline-block; padding: 6px 12px; margin: 4px; background: #0a2f0a; border: 1px solid #4caf50; color: #4caf50; font-size: 13px; }
+    .badge { display: inline-block; padding: 4px 10px; margin: 2px; font-size: 12px; }
+    .badge-good { background: #0a2f0a; border: 1px solid #4caf50; color: #4caf50; }
+    .badge-bad { background: #2f0a0a; border: 1px solid #f44336; color: #f44336; }
+    .badge-warn { background: #2f2a0a; border: 1px solid #ff9800; color: #ff9800; }
+    .status-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #222; }
+    .status-row:last-child { border-bottom: none; }
     .fp { font-family: monospace; font-size: 11px; padding: 6px 10px; margin: 4px 0; background: #0a0a0a; border: 1px solid #333; color: #8ab4f8; word-break: break-all; }
     button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; margin-top: 8px; }
     button:hover { background: #333; }
@@ -43,6 +49,22 @@ app.get("/", (c) => {
     <div id="result" class="result checking">
       <div class="result-title" id="result-title">Checking...</div>
       <div class="result-info" id="result-info">Verifying tracking status</div>
+    </div>
+
+    <div class="section">
+      <h3>Browser Status</h3>
+      <div class="status-row">
+        <span>Do Not Track</span>
+        <span id="dnt-status" class="badge badge-warn">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span>3rd-party Cookies</span>
+        <span id="cookie-status" class="badge badge-warn">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span>Storage Access API</span>
+        <span id="saa-status" class="badge badge-warn">Checking...</span>
+      </div>
     </div>
 
     <div class="section">
@@ -123,6 +145,41 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
       return result.join('');
     }
 
+    async function checkBrowserStatus(hasCookie) {
+      const dntEl = document.getElementById('dnt-status');
+      const cookieEl = document.getElementById('cookie-status');
+      const saaEl = document.getElementById('saa-status');
+
+      const dnt = navigator.doNotTrack;
+      if (dnt === '1') {
+        dntEl.textContent = 'Enabled';
+        dntEl.className = 'badge badge-bad';
+      } else if (dnt === '0') {
+        dntEl.textContent = 'Disabled';
+        dntEl.className = 'badge badge-good';
+      } else {
+        dntEl.textContent = 'Not set';
+        dntEl.className = 'badge badge-warn';
+      }
+
+      if (hasCookie) {
+        cookieEl.textContent = 'Allowed';
+        cookieEl.className = 'badge badge-good';
+      } else {
+        cookieEl.textContent = 'Blocked';
+        cookieEl.className = 'badge badge-bad';
+      }
+
+      try {
+        const perm = await navigator.permissions.query({ name: 'storage-access' });
+        saaEl.textContent = perm.state.charAt(0).toUpperCase() + perm.state.slice(1);
+        saaEl.className = 'badge ' + (perm.state === 'granted' ? 'badge-good' : perm.state === 'denied' ? 'badge-bad' : 'badge-warn');
+      } catch {
+        saaEl.textContent = 'Not supported';
+        saaEl.className = 'badge badge-warn';
+      }
+    }
+
     async function runCheck() {
       const resultEl = document.getElementById('result');
       const titleEl = document.getElementById('result-title');
@@ -143,6 +200,7 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         hasCookie = data.cookieReceived;
       } catch {}
 
+      checkBrowserStatus(hasCookie);
       checkSharedStorage();
 
       if (hasCookie) {
