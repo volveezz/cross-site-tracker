@@ -633,6 +633,29 @@ app.get("/track-verify", (c) => {
 	});
 });
 
+app.get("/cookie-test", (c) => {
+	const cookie = c.req.header("Cookie") || "";
+	const hasTestCookie = cookie.includes("cookie_test=1");
+	return new Response(JSON.stringify({ cookiesWork: hasTestCookie }), {
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+			"Set-Cookie": "cookie_test=1; SameSite=None; Secure; Path=/; Max-Age=60",
+		},
+	});
+});
+
+app.options("/cookie-test", (c) => {
+	return new Response(null, {
+		headers: {
+			"Access-Control-Allow-Origin": c.req.header("Origin") || "*",
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, OPTIONS",
+		},
+	});
+});
+
 app.options("/track-verify", (c) => {
 	return new Response(null, {
 		headers: {

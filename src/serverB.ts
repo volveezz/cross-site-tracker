@@ -145,7 +145,7 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
       return result.join('');
     }
 
-    async function checkBrowserStatus(hasCookie) {
+    async function checkBrowserStatus() {
       const dntEl = document.getElementById('dnt-status');
       const cookieEl = document.getElementById('cookie-status');
       const saaEl = document.getElementById('saa-status');
@@ -162,11 +162,19 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         dntEl.className = 'badge badge-warn';
       }
 
-      if (hasCookie) {
-        cookieEl.textContent = 'Allowed';
-        cookieEl.className = 'badge badge-good';
-      } else {
-        cookieEl.textContent = 'Blocked';
+      try {
+        await fetch(TRACKER + '/cookie-test', { credentials: 'include' });
+        const res = await fetch(TRACKER + '/cookie-test', { credentials: 'include' });
+        const data = await res.json();
+        if (data.cookiesWork) {
+          cookieEl.textContent = 'Allowed';
+          cookieEl.className = 'badge badge-good';
+        } else {
+          cookieEl.textContent = 'Blocked';
+          cookieEl.className = 'badge badge-bad';
+        }
+      } catch {
+        cookieEl.textContent = 'Error';
         cookieEl.className = 'badge badge-bad';
       }
 
@@ -200,7 +208,7 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         hasCookie = data.cookieReceived;
       } catch {}
 
-      checkBrowserStatus(hasCookie);
+      checkBrowserStatus();
       checkSharedStorage();
 
       if (hasCookie) {
