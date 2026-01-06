@@ -21,22 +21,26 @@ app.get("/", (c) => {
     .sections { display: grid; gap: 16px; }
     .section { padding: 16px; background: #111; border: 1px solid #333; }
     .section h3 { margin: 0 0 8px 0; color: #fff; }
-    .game-frame { width: 100%; height: 700px; border: none; background: #111; }
+    .game-frame { width: 100%; height: 800px; border: none; background: #111; }
     a { color: #8ab4f8; }
   </style>
 </head>
 <body>
   <h1>Casino</h1>
   <div class="info">
-    <strong>Game:</strong> ${BRIDGE_URL}<br>
-    <strong>Tracker:</strong> ${TRACKER_URL}
+    <strong>Game:</strong> <a href="${BRIDGE_URL}" target="_blank">${BRIDGE_URL}</a><br>
+    <strong>Tracker:</strong> <a href="${TRACKER_URL}" target="_blank">${TRACKER_URL}</a>
   </div>
 
-  <iframe class="game-frame" src="${BRIDGE_URL}"></iframe>
+  <iframe id="game-frame" class="game-frame" src="${BRIDGE_URL}"></iframe>
 
-  <p style="margin-top: 20px;">
-    <a href="${TRACKER_URL}" target="_blank">Open Tracker</a>
-  </p>
+  <script>
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'resize_frame' && e.data.height) {
+        document.getElementById('game-frame').style.height = e.data.height + 'px';
+      }
+    });
+  </script>
 </body>
 </html>
 `;

@@ -14,7 +14,8 @@ app.get("/", (c) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
   <style>
-    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #000; color: #e0e0e0; }
+    html, body { overflow: hidden; }
+    body { font-family: system-ui; max-width: 900px; margin: 40px auto; padding: 0 20px 40px; background: #000; color: #e0e0e0; }
     h1 { color: #fff; }
     .sections { display: grid; gap: 16px; }
     .section { padding: 16px; background: #111; border: 1px solid #333; }
@@ -100,6 +101,11 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
       <button onclick="runCheck()">Re-check</button>
       <button onclick="location.reload()">Refresh</button>
     </div>
+
+    <div id="debug-section" class="section" style="display:none;">
+      <h3>Debug (SAA localStorage)</h3>
+      <pre id="debug-data" class="fp" style="white-space:pre-wrap;"></pre>
+    </div>
   </div>
 
   <script>
@@ -178,14 +184,8 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         cookieEl.className = 'badge badge-bad';
       }
 
-      try {
-        const perm = await navigator.permissions.query({ name: 'storage-access' });
-        saaEl.textContent = perm.state.charAt(0).toUpperCase() + perm.state.slice(1);
-        saaEl.className = 'badge ' + (perm.state === 'granted' ? 'badge-good' : perm.state === 'denied' ? 'badge-bad' : 'badge-warn');
-      } catch {
-        saaEl.textContent = 'Not supported';
-        saaEl.className = 'badge badge-warn';
-      }
+      saaEl.textContent = 'Checking...';
+      saaEl.className = 'badge badge-warn';
     }
 
     async function runCheck() {
@@ -210,6 +210,7 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
 
       checkBrowserStatus();
       checkSharedStorage();
+      loadSAAStatus();
 
       if (hasCookie) {
         showResult({ found: true, method: 'cookie', fpMatch: false, visits: [] });
@@ -217,6 +218,15 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         infoEl.textContent = 'Checking storage...';
         showSAAIframe(false);
       }
+    }
+
+    function loadSAAStatus() {
+      window.addEventListener('message', handleSAAMessage);
+      const iframe = document.createElement('iframe');
+      iframe.src = TRACKER + '/embed?fp=';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 3000);
     }
 
     async function checkSharedStorage() {
@@ -273,16 +283,29 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
     }
 
     function handleSAAMessage(e) {
+      if (e.data && (e.data.type === 'saa_result' || e.data.type === 'saa_status')) {
+        const saaEl = document.getElementById('saa-status');
+        if (typeof e.data.saaGranted === 'boolean') {
+          saaEl.textContent = e.data.saaGranted ? 'Granted' : 'Not granted';
+          saaEl.className = 'badge ' + (e.data.saaGranted ? 'badge-good' : 'badge-warn');
+        }
+      }
       if (e.data && e.data.type === 'saa_result') {
         window.removeEventListener('message', handleSAAMessage);
         document.getElementById('saa-container').style.display = 'none';
 
+        const hasCookie = cookieFound || e.data.hasCookie;
         showResult({
-          found: e.data.found || cookieFound,
-          method: cookieFound ? 'cookie' : null,
+          found: e.data.found || hasCookie,
+          method: hasCookie ? 'cookie' : null,
           fpMatch: e.data.fpMatch,
           visits: e.data.visits
         });
+
+        if (e.data.debug) {
+          document.getElementById('debug-section').style.display = 'block';
+          document.getElementById('debug-data').textContent = JSON.stringify(e.data.debug, null, 2);
+        }
       }
     }
 
@@ -315,7 +338,23 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
       }
     }
 
+    function sendHeight() {
+      if (window.parent && window.parent !== window) {
+        const height = Math.max(
+          document.body.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.scrollHeight,
+          document.documentElement.offsetHeight
+        );
+        window.parent.postMessage({ type: 'resize_frame', height: height }, '*');
+      }
+    }
+
     runCheck();
+    setTimeout(sendHeight, 100);
+    setTimeout(sendHeight, 500);
+    setTimeout(sendHeight, 1000);
+    new MutationObserver(() => setTimeout(sendHeight, 50)).observe(document.body, { childList: true, subtree: true });
   </script>
 </body>
 </html>

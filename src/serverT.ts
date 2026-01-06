@@ -37,10 +37,15 @@ app.get("/", (c) => {
     .fp { font-family: monospace; font-size: 11px; padding: 6px 10px; margin: 4px 0; background: #0a0a0a; border: 1px solid #333; color: #8ab4f8; word-break: break-all; }
     button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; margin-top: 8px; }
     button:hover { background: #333; }
+    .info { background: #0d1a26; padding: 12px; margin-bottom: 20px; border: 1px solid #1a3a5c; }
+    a { color: #8ab4f8; }
   </style>
 </head>
 <body>
   <h1>Tracker</h1>
+  <div class="info">
+    <strong>Purpose:</strong> Storage for tracking data (cookies, localStorage, fingerprints)
+  </div>
 
   <div class="sections">
     <div class="section" style="background: ${hasCookie ? "#0a2f0a" : "#2f0a0a"}; border-color: ${hasCookie ? "#4caf50" : "#f44336"};">
@@ -148,12 +153,17 @@ app.get("/", (c) => {
 
       const saaEl = document.getElementById('saa-perm');
       try {
-        const perm = await navigator.permissions.query({ name: 'storage-access' });
-        saaEl.textContent = perm.state.charAt(0).toUpperCase() + perm.state.slice(1);
-        saaEl.className = 'badge ' + (perm.state === 'granted' ? 'badge-good' : perm.state === 'denied' ? 'badge-bad' : 'badge-warn');
+        if (document.hasStorageAccess) {
+          const hasAccess = await document.hasStorageAccess();
+          saaEl.textContent = hasAccess ? 'Granted' : 'Not granted';
+          saaEl.className = 'badge ' + (hasAccess ? 'badge-good' : 'badge-warn');
+        } else {
+          saaEl.textContent = 'Not supported';
+          saaEl.className = 'badge badge-warn';
+        }
       } catch {
-        saaEl.textContent = 'Not supported';
-        saaEl.className = 'badge badge-warn';
+        saaEl.textContent = 'Error';
+        saaEl.className = 'badge badge-bad';
       }
     }
 
@@ -392,6 +402,7 @@ app.get("/ping", (c) => {
       const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       visits.push({ source, timestamp, method: 'iframe' });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+      document.cookie = 'tracker_cookie=' + Date.now() + '; SameSite=None; Secure; Path=/; Max-Age=31536000';
       return { success: true, timestamp };
     } catch (e) {
       return { success: false, error: e.message };
@@ -434,6 +445,7 @@ app.get("/receiver", (c) => {
       const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       visits.push({ source, timestamp, method: 'popup' });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+      document.cookie = 'tracker_cookie=' + Date.now() + '; SameSite=None; Secure; Path=/; Max-Age=31536000';
       return { success: true, timestamp };
     } catch (e) {
       return { success: false, error: e.message };
@@ -539,7 +551,7 @@ app.get("/embed", (c) => {
   </style>
 </head>
 <body>
-  <button id="btn" class="btn hidden" onclick="requestAccess()">Verify Visit</button>
+  <button id="btn" class="btn hidden" onclick="requestAccess()">Grant Access</button>
   <div id="status" class="status pending">Checking...</div>
 
   <script>
@@ -547,7 +559,7 @@ app.get("/embed", (c) => {
     const FP_KEY = '${FP_KEY}';
     const providedFp = '${fp}';
 
-    function checkStorage() {
+    async function checkStorage() {
       try {
         const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const fps = JSON.parse(localStorage.getItem(FP_KEY) || '[]');
@@ -557,14 +569,57 @@ app.get("/embed", (c) => {
         if (found) {
           document.getElementById('status').className = 'status success';
           document.getElementById('status').textContent = 'Found: ' + visits.length + ' visits' + (fpMatch ? ' + fingerprint' : '');
-          window.parent.postMessage({ type: 'saa_result', found: true, fpMatch: fpMatch, visits: visits }, '*');
+          window.parent.postMessage({ type: 'saa_result', found: true, fpMatch: fpMatch, visits: visits, saaGranted: true }, '*');
           return;
         }
       } catch (e) {}
 
-      // No data found - show SAA button
-      document.getElementById('btn').className = 'btn';
-      document.getElementById('status').textContent = 'Click to check with Storage Access';
+      if (document.requestStorageAccess) {
+        try {
+          let handle = null;
+          try {
+            handle = await document.requestStorageAccess({ localStorage: true });
+          } catch {
+            await document.requestStorageAccess();
+          }
+
+          const storage = handle?.localStorage || localStorage;
+          const allKeys = Object.keys(storage);
+          const allData = {};
+          allKeys.forEach(k => allData[k] = storage.getItem(k));
+
+          const visits = JSON.parse(storage.getItem(STORAGE_KEY) || '[]');
+          const fps = JSON.parse(storage.getItem(FP_KEY) || '[]');
+          const fpMatch = providedFp && fps.includes(providedFp);
+          const hasCookie = document.cookie.includes('tracker_cookie');
+          const found = visits.length > 0 || fpMatch || hasCookie;
+
+          const debug = {
+            handleUsed: !!handle?.localStorage,
+            allKeys,
+            allData,
+            cookie: document.cookie
+          };
+
+          if (found || hasCookie) {
+            document.getElementById('status').className = 'status success';
+            document.getElementById('status').textContent = 'Found: ' + (hasCookie ? 'cookie' : visits.length + ' visits');
+            window.parent.postMessage({ type: 'saa_result', found: true, fpMatch, visits, hasCookie, saaGranted: true, debug }, '*');
+            return;
+          }
+
+          document.getElementById('status').textContent = 'No tracking data';
+          window.parent.postMessage({ type: 'saa_result', found: false, saaGranted: true, debug }, '*');
+          return;
+        } catch (e) {
+          document.getElementById('btn').className = 'btn';
+          document.getElementById('status').textContent = 'Grant access to read tracking data';
+          window.parent.postMessage({ type: 'saa_status', saaGranted: false }, '*');
+        }
+      } else {
+        document.getElementById('status').textContent = 'SAA not supported';
+        window.parent.postMessage({ type: 'saa_result', found: false, error: 'not supported', saaGranted: false }, '*');
+      }
     }
 
     async function requestAccess() {
@@ -572,27 +627,59 @@ app.get("/embed", (c) => {
 
       if (!document.requestStorageAccess) {
         statusEl.textContent = 'Storage Access API not supported';
-        window.parent.postMessage({ type: 'saa_result', found: false, error: 'API not supported' }, '*');
+        window.parent.postMessage({ type: 'saa_result', found: false, error: 'API not supported', saaGranted: false }, '*');
         return;
       }
 
       try {
-        await document.requestStorageAccess();
+        let handle = null;
+        try {
+          handle = await document.requestStorageAccess({ localStorage: true });
+        } catch {
+          await document.requestStorageAccess();
+        }
 
-        const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const fps = JSON.parse(localStorage.getItem(FP_KEY) || '[]');
+        const storage = handle?.localStorage || localStorage;
+        const allKeys = Object.keys(storage);
+        const allData = {};
+        allKeys.forEach(k => allData[k] = storage.getItem(k));
+
+        const visits = JSON.parse(storage.getItem(STORAGE_KEY) || '[]');
+        const fps = JSON.parse(storage.getItem(FP_KEY) || '[]');
         const fpMatch = providedFp && fps.includes(providedFp);
-        const found = visits.length > 0 || fpMatch;
+        const hasCookie = document.cookie.includes('tracker_cookie');
+        const found = visits.length > 0 || fpMatch || hasCookie;
+
+        let methods = [];
+        if (hasCookie) methods.push('cookie');
+        visits.forEach(v => {
+          const m = v.method || v.source || 'unknown';
+          if (!methods.includes(m)) methods.push(m);
+        });
+        if (fpMatch) methods.push('fingerprint');
 
         statusEl.className = 'status success';
         statusEl.textContent = found
-          ? 'Found: ' + visits.length + ' visits' + (fpMatch ? ' + fingerprint' : '')
+          ? 'Found: ' + methods.join(', ')
           : 'No tracking data found';
 
-        window.parent.postMessage({ type: 'saa_result', found: found, fpMatch: fpMatch, visits: visits }, '*');
+        window.parent.postMessage({
+          type: 'saa_result',
+          found: found,
+          fpMatch: fpMatch,
+          visits: visits,
+          hasCookie: hasCookie,
+          saaGranted: true,
+          debug: {
+            handleUsed: !!handle?.localStorage,
+            allKeys,
+            allData,
+            cookie: document.cookie
+          }
+        }, '*');
       } catch (e) {
         statusEl.textContent = 'Denied: ' + e.message;
-        window.parent.postMessage({ type: 'saa_result', found: false, error: e.message }, '*');
+        window.parent.postMessage({ type: 'saa_result', found: false, error: e.message, saaGranted: false }, '*');
       }
     }
 

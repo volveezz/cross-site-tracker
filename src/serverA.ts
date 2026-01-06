@@ -42,66 +42,33 @@ app.get("/", (c) => {
 <body>
   <h1>Landing</h1>
   <div class="info">
-    <strong>Tracker:</strong> ${TRACKER_URL}<br>
+    <strong>Tracker:</strong> <a href="${TRACKER_URL}" target="_blank">${TRACKER_URL}</a><br>
     <strong>Purpose:</strong> Register user visit with Tracker
   </div>
 
   <button class="run-all" onclick="runAllTests()">Run All Tests</button>
-  <p><a href="${TRACKER_URL}" target="_blank">Open Tracker to see stored data</a></p>
 
   <div class="tests">
     <div class="test" id="test-iframe">
       <h3>Iframe</h3>
-      <p>Load hidden iframe of Tracker, send postMessage</p>
+      <p>Silent - hidden iframe, postMessage</p>
       <button onclick="runIframe()">Run</button>
       <div id="iframe-status" class="status pending">Not run</div>
       <div id="iframe-data" class="result-data" style="display:none"></div>
     </div>
 
-    <div class="test" id="test-windowname">
-      <h3>window.name</h3>
-      <p>Set window.name and redirect (will leave this page)</p>
-      <button onclick="runWindowName()">Run</button>
-      <div id="windowname-status" class="status pending">Not run</div>
-    </div>
-
-    <div class="test" id="test-popup">
-      <h3>Popup</h3>
-      <p>Open popup to Tracker and send postMessage</p>
-      <button onclick="runPopup()">Run</button>
-      <div id="popup-status" class="status pending">Not run</div>
-      <div id="popup-data" class="result-data" style="display:none"></div>
-    </div>
-
-    <div class="test" id="test-saa">
-      <h3>Storage Access API</h3>
-      <p>Load iframe, click button inside to grant access</p>
-      <button onclick="runSAA()">Load iframe</button>
-      <div id="saa-status" class="status pending">Not run</div>
-      <div id="saa-frame" style="display:none; margin-top:12px; border:1px solid #333;">
-        <iframe id="saa-iframe" style="width:100%; height:200px; border:none;"></iframe>
-      </div>
-    </div>
-
     <div class="test" id="test-crosscookie">
       <h3>Cross-Origin Cookie</h3>
-      <p>Fetch request to Tracker with credentials, server sets cookie via Set-Cookie header</p>
+      <p>Silent - fetch with credentials</p>
       <button onclick="runCrossCookie()">Run</button>
       <button onclick="checkCrossCookie()">Check</button>
       <div id="crosscookie-status" class="status pending">Not run</div>
       <div id="crosscookie-data" class="result-data" style="display:none"></div>
     </div>
 
-    <div class="test" id="test-redirect">
-      <h3>Redirect Bounce</h3>
-      <p>Redirect to Tracker, write to first-party storage, redirect back</p>
-      <button onclick="runRedirectTrack()">Run</button>
-      <div id="redirect-status" class="status pending">Not run</div>
-    </div>
-
     <div class="test" id="test-sw">
       <h3>Service Worker</h3>
-      <p>Register SW on Tracker via iframe, write flag to Cache API</p>
+      <p>Silent - register SW via iframe, Cache API</p>
       <button onclick="runServiceWorker()">Run</button>
       <div id="sw-status" class="status pending">Not run</div>
       <div id="sw-data" class="result-data" style="display:none"></div>
@@ -109,7 +76,7 @@ app.get("/", (c) => {
 
     <div class="test" id="test-fingerprint">
       <h3>Fingerprint</h3>
-      <p>Calculate browser fingerprint, store on Tracker via iframe</p>
+      <p>Silent - calculate hash, store via iframe</p>
       <button onclick="runFingerprint()">Run</button>
       <div id="fingerprint-status" class="status pending">Not run</div>
       <div id="fingerprint-data" class="result-data" style="display:none"></div>
@@ -117,16 +84,41 @@ app.get("/", (c) => {
 
     <div class="test" id="test-sharedstorage">
       <h3>Shared Storage API</h3>
-      <p>Chrome Privacy Sandbox - cross-site storage that survives cookie blocking</p>
+      <p>Silent - Chrome Privacy Sandbox cross-site storage</p>
       <button onclick="runSharedStorage()">Run</button>
       <div id="sharedstorage-status" class="status pending">Not run</div>
     </div>
 
-    <div class="test" id="test-tracker" style="background: #1a0a2e; border-color: #4a1a7e;">
-      <h3>Central Tracker</h3>
-      <p>Redirect to Tracker server, register visit in Tracker's first-party storage</p>
-      <button onclick="runTracker()">Run</button>
-      <div id="tracker-status" class="status pending">Not run</div>
+    <div class="test" id="test-saa">
+      <h3>Storage Access API</h3>
+      <p>Requires click in iframe to grant access</p>
+      <button onclick="runSAA()">Load iframe</button>
+      <div id="saa-status" class="status pending">Not run</div>
+      <div id="saa-frame" style="display:none; margin-top:12px; border:1px solid #333;">
+        <iframe id="saa-iframe" style="width:100%; height:200px; border:none;"></iframe>
+      </div>
+    </div>
+
+    <div class="test" id="test-popup">
+      <h3>Popup</h3>
+      <p>Opens new window</p>
+      <button onclick="runPopup()">Run</button>
+      <div id="popup-status" class="status pending">Not run</div>
+      <div id="popup-data" class="result-data" style="display:none"></div>
+    </div>
+
+    <div class="test" id="test-windowname">
+      <h3>window.name</h3>
+      <p>Redirects away and back</p>
+      <button onclick="runWindowName()">Run</button>
+      <div id="windowname-status" class="status pending">Not run</div>
+    </div>
+
+    <div class="test" id="test-redirect">
+      <h3>Redirect</h3>
+      <p>Redirects to Tracker and back</p>
+      <button onclick="runRedirectTrack()">Run</button>
+      <div id="redirect-status" class="status pending">Not run</div>
     </div>
   </div>
 
@@ -262,11 +254,14 @@ app.get("/", (c) => {
       iframe.src = TRACKER + '/embed';
 
       window.addEventListener('message', function handler(e) {
-        if (e.data && e.data.type === 'storage_access_result') {
-          if (e.data.success) {
-            setStatus('saa', 'success', 'Flag written!');
+        if (e.data && (e.data.type === 'storage_access_result' || e.data.type === 'saa_result')) {
+          window.removeEventListener('message', handler);
+          if (e.data.success || e.data.found) {
+            setStatus('saa', 'success', 'Found: ' + (e.data.visits?.length || 0) + ' visits');
+          } else if (e.data.saaGranted === false) {
+            setStatus('saa', 'running', 'Click "Grant Access" in iframe below');
           } else {
-            setStatus('saa', 'failed', e.data.message || 'Failed');
+            setStatus('saa', 'failed', e.data.error || 'No data found');
           }
         }
       });
@@ -297,9 +292,10 @@ app.get("/", (c) => {
       }
     }
 
-    function runRedirectTrack() {
+    async function runRedirectTrack() {
       setStatus('redirect', 'running', 'Redirecting to Tracker...');
-      window.location.href = TRACKER + '/bounce?return=' + encodeURIComponent(window.location.href);
+      const fp = await generateFingerprint();
+      window.location.href = TRACKER + '/register?source=landing&method=redirect&fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
     }
 
     function runServiceWorker() {
@@ -437,12 +433,6 @@ app.get("/", (c) => {
           }
         });
       });
-    }
-
-    async function runTracker() {
-      setStatus('tracker', 'running', 'Redirecting to Tracker...');
-      const fp = await generateFingerprint();
-      window.location.href = TRACKER + '/register?source=landing&fp=' + fp + '&return=' + encodeURIComponent(window.location.href);
     }
 
     async function runAllTests() {
