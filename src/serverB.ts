@@ -283,12 +283,16 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
     }
 
     function handleSAAMessage(e) {
-      if (e.data && (e.data.type === 'saa_result' || e.data.type === 'saa_status')) {
+      if (e.data && (e.data.type === 'saa_result' || e.data.type === 'saa_status' || e.data.type === 'saa_needs_gesture')) {
         const saaEl = document.getElementById('saa-status');
         if (typeof e.data.saaGranted === 'boolean') {
           saaEl.textContent = e.data.saaGranted ? 'Granted' : 'Not granted';
           saaEl.className = 'badge ' + (e.data.saaGranted ? 'badge-good' : 'badge-warn');
         }
+      }
+      if (e.data && e.data.type === 'saa_needs_gesture') {
+        document.getElementById('result-info').textContent = 'Click "Grant Access" in iframe below';
+        document.getElementById('saa-container').style.display = 'block';
       }
       if (e.data && e.data.type === 'saa_result') {
         window.removeEventListener('message', handleSAAMessage);

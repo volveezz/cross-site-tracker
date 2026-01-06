@@ -614,7 +614,7 @@ app.get("/embed", (c) => {
         } catch (e) {
           document.getElementById('btn').className = 'btn';
           document.getElementById('status').textContent = 'Grant access to read tracking data';
-          window.parent.postMessage({ type: 'saa_status', saaGranted: false }, '*');
+          window.parent.postMessage({ type: 'saa_needs_gesture', saaGranted: false }, '*');
         }
       } else {
         document.getElementById('status').textContent = 'SAA not supported';
