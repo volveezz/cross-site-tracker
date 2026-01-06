@@ -573,7 +573,8 @@ const tls = await (async () => {
 })();
 
 export const server = {
-	port: 3000,
+	port: Number(process.env.PORT) || 3000,
+	hostname: "0.0.0.0",
 	fetch: app.fetch.bind(app),
 	...(tls && { tls }),
 };

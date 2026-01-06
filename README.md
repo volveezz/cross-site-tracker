@@ -1,106 +1,94 @@
 # User Tracker
 
-Определяет, посещал ли пользователь заготовленный ленд перед переходом на игру.
+Cross-site user tracking demo. Detects if user visited Landing before going to Casino.
 
-## Методы
+## Architecture
 
-### 1. Iframe
-
-Ленд загружает скрытый iframe и пишет в его localStorage через postMessage.
-
-```ts
-// Ленд
-const iframe = document.createElement('iframe');
-iframe.src = GAME_URL + '/ping';
-iframe.style.display = 'none';
-document.body.appendChild(iframe);
-
-iframe.onload = () => {
-  iframe.contentWindow.postMessage({ type: 'set_flag' }, '*');
-};
+```
+Landing (landing.local:3000)
+    ↓ sets tracking data
+Tracker (tracker.local:3002)
+    ↑ checks tracking data
+Game (game.local:3003) ← embedded in Casino
+    ↑
+Casino (casino.local:3001)
 ```
 
-```ts
-// /ping с игры
-window.addEventListener('message', (e) => {
-  if (e.data.type === 'set_flag') {
-    localStorage.setItem('test2_iframe', new Date().toISOString());
-  }
-});
+- **Landing** - runs tracking tests, redirects to Tracker to set cookies/localStorage
+- **Tracker** - central storage, sets first-party cookies and localStorage
+- **Game** - embedded in Casino, calls Tracker to verify tracking
+- **Casino** - third-party site, embeds Game iframe
+
+## Setup
+
+### 1. Add to hosts file
+
+**Windows** (`C:\Windows\System32\drivers\etc\hosts`):
+```
+127.0.0.1 landing.local
+127.0.0.1 game.local
+127.0.0.1 tracker.local
+127.0.0.1 casino.local
 ```
 
-### 2. window.name
-
-Ленд записывает в window.name и редиректит на игру.
-
-```ts
-// Ленд
-window.name = 'visited_landing_' + Date.now();
-window.location.href = GAME_URL + '?via=windowname';
+**Linux/Mac** (`/etc/hosts`):
+```
+127.0.0.1 landing.local
+127.0.0.1 game.local
+127.0.0.1 tracker.local
+127.0.0.1 casino.local
 ```
 
-```ts
-// Игра
-if (window.name.startsWith('visited_landing')) {
-  localStorage.setItem('test3_windowname', new Date().toISOString());
-  window.name = '';
-}
-```
-
-### 3. Popup
-
-Ленд открывает попап игры и отправляет postMessage.
-
-```ts
-// Ленд
-const popup = window.open(GAME_URL + '/receiver', 'game', 'width=600,height=400');
-popup.postMessage({ type: 'set_flag' }, '*');
-```
-
-```ts
-// /receiver игры
-window.addEventListener('message', (e) => {
-  if (e.data.type === 'set_flag') {
-    localStorage.setItem('test4_popup', new Date().toISOString());
-  }
-});
-```
-
-### 4. Storage Access API
-
-Игра в iframe запрашивает доступ к своему localStorage после клика пользователя.
-
-```ts
-// Игра (в iframe на ленде)
-button.onclick = async () => {
-  await document.requestStorageAccess();
-  const flag = localStorage.getItem('test2_iframe');
-};
-```
-
-## Запуск
+### 2. Install dependencies
 
 ```bash
 bun install
-
-# Ленд
-bun run dev:a
-
-# Игра
-bun run dev:x
 ```
 
-## Переменные окружения
+### 3. Generate SSL certs (optional, for HTTPS)
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout certs/key.pem -out certs/cert.pem -days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:landing.local,DNS:game.local,DNS:tracker.local,DNS:casino.local"
+```
+
+### 4. Run
+
+**Development (with hot reload):**
+```bash
+bun run dev:a  # Landing  - https://landing.local:3000
+bun run dev:b  # Game     - https://game.local:3003
+bun run dev:t  # Tracker  - https://tracker.local:3002
+bun run dev:x  # Casino   - https://casino.local:3001
+```
+
+**Docker:**
+```bash
+make start   # Start all services
+make stop    # Stop all services
+make logs    # View logs
+```
+
+## Tracking Methods
+
+| Method | Description |
+|--------|-------------|
+| Cookie | SameSite=None cookie set via redirect |
+| Iframe | postMessage to Tracker iframe |
+| Popup | postMessage to Tracker popup |
+| Redirect | Direct redirect to Tracker, write to first-party storage |
+| Fingerprint | Browser fingerprint stored on Tracker |
+| Service Worker | SW registers on Tracker, stores in Cache API |
+| Shared Storage | Chrome Privacy Sandbox API |
+
+## Test Flow
+
+1. Visit https://tracker.local:3002 → Clear All
+2. Visit https://landing.local:3000 → Run All Tests
+3. Visit https://casino.local:3001 → Check if Game shows "Tracked"
+
+## Environment Variables
 
 ```
-SITE_A_URL=http://localhost:3000
-SITE_X_URL=http://localhost:3001
+TRACKER_URL=https://tracker.local:3002
+BRIDGE_URL=https://game.local:3003
 ```
-
-## Storage ключи
-
-| Метод | Ключ |
-|-------|------|
-| Iframe | `test2_iframe` |
-| window.name | `test3_windowname` |
-| Popup | `test4_popup` |
