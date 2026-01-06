@@ -6,6 +6,9 @@
 app = 'cross-site-tracker'
 primary_region = 'fra'
 
+[env]
+  TRACKER_URL = "https://cross-site-tracker.vercel.app"
+
 [build]
 
 [http_service]
