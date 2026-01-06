@@ -243,20 +243,8 @@ app.get("/tests", (c) => {
 
 export default app;
 
-const tls = await (async () => {
-	try {
-		const key = Bun.file("certs/key.pem");
-		const cert = Bun.file("certs/cert.pem");
-		if (await key.exists() && await cert.exists()) {
-			return { key, cert };
-		}
-	} catch {}
-	return undefined;
-})();
-
 export const server = {
 	port: Number(process.env.PORT) || 3001,
 	hostname: "0.0.0.0",
 	fetch: app.fetch.bind(app),
-	...(tls && { tls }),
 };
