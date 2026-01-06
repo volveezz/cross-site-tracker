@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 
 const TRACKER_URL = (process.env.TRACKER_URL || "http://localhost:3002").replace(/\/$/, "");
+const BRIDGE_URL = (process.env.BRIDGE_URL || "http://localhost:3003").replace(/\/$/, "");
 
 const app = new Hono();
 
@@ -20,23 +21,18 @@ app.get("/", (c) => {
     .sections { display: grid; gap: 16px; }
     .section { padding: 16px; background: #111; border: 1px solid #333; }
     .section h3 { margin: 0 0 8px 0; color: #fff; }
-    .game-frame { width: 100%; height: 300px; border: none; background: #111; }
+    .game-frame { width: 100%; height: 700px; border: none; background: #111; }
     a { color: #8ab4f8; }
   </style>
 </head>
 <body>
   <h1>Casino</h1>
   <div class="info">
-    <strong>Tracker:</strong> ${TRACKER_URL}<br>
-    <strong>Role:</strong> Third-party casino site embedding game provider
+    <strong>Game:</strong> ${BRIDGE_URL}<br>
+    <strong>Tracker:</strong> ${TRACKER_URL}
   </div>
 
-  <div class="sections">
-    <div class="section">
-      <h3>Embedded Game</h3>
-      <iframe class="game-frame" src="${TRACKER_URL}/game"></iframe>
-    </div>
-  </div>
+  <iframe class="game-frame" src="${BRIDGE_URL}"></iframe>
 
   <p style="margin-top: 20px;">
     <a href="${TRACKER_URL}" target="_blank">Open Tracker</a>
@@ -243,7 +239,19 @@ app.get("/tests", (c) => {
 
 export default app;
 
+const tls = await (async () => {
+	try {
+		const key = Bun.file("certs/key.pem");
+		const cert = Bun.file("certs/cert.pem");
+		if (await key.exists() && await cert.exists()) {
+			return { key, cert };
+		}
+	} catch {}
+	return undefined;
+})();
+
 export const server = {
 	port: 3001,
 	fetch: app.fetch.bind(app),
+	...(tls && { tls }),
 };

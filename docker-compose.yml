@@ -1,0 +1,31 @@
+services:
+  landing:
+    build: .
+    command: bun run src/devA.ts
+    ports:
+      - "3000:3000"
+    environment:
+      - TRACKER_URL=http://localhost:3002
+
+  casino:
+    build: .
+    command: bun run src/devX.ts
+    ports:
+      - "3001:3001"
+    environment:
+      - TRACKER_URL=http://localhost:3002
+      - BRIDGE_URL=http://localhost:3003
+
+  tracker:
+    build: .
+    command: bun run src/devT.ts
+    ports:
+      - "3002:3002"
+
+  game:
+    build: .
+    command: bun run src/devB.ts
+    ports:
+      - "3003:3003"
+    environment:
+      - TRACKER_URL=http://localhost:3002

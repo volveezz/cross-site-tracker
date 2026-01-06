@@ -55,6 +55,11 @@ app.get("/", (c) => {
     </div>
 
     <div class="section">
+      <h3>Service Worker</h3>
+      <div id="sw-status"></div>
+    </div>
+
+    <div class="section">
       <h3>Actions</h3>
       <button onclick="clearData()">Clear All</button>
       <button onclick="location.reload()">Refresh</button>
@@ -62,7 +67,7 @@ app.get("/", (c) => {
   </div>
 
   <script>
-    function loadData() {
+    async function loadData() {
       const visits = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '[]');
       const fps = JSON.parse(localStorage.getItem('${FP_KEY}') || '[]');
 
@@ -80,12 +85,48 @@ app.get("/", (c) => {
       } else {
         fpsEl.innerHTML = '<span class="method method-none">No fingerprints</span>';
       }
+
+      const swEl = document.getElementById('sw-status');
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration('/tracker-sw.js');
+          if (reg && reg.active) {
+            const mc = new MessageChannel();
+            mc.port1.onmessage = (e) => {
+              const swVisits = e.data.visits || [];
+              if (swVisits.length) {
+                swEl.innerHTML = '<span class="method">serviceworker (' + swVisits.length + ' visits)</span>';
+              } else {
+                swEl.innerHTML = '<span class="method method-none">Registered, no visits</span>';
+              }
+            };
+            reg.active.postMessage({ type: 'get_visits' }, [mc.port2]);
+          } else {
+            swEl.innerHTML = '<span class="method method-none">Not registered</span>';
+          }
+        } else {
+          swEl.innerHTML = '<span class="method method-none">Not supported</span>';
+        }
+      } catch (e) {
+        swEl.innerHTML = '<span class="method method-none">Error: ' + e.message + '</span>';
+      }
     }
 
-    function clearData() {
+    async function clearData() {
       localStorage.removeItem('${STORAGE_KEY}');
       localStorage.removeItem('${FP_KEY}');
       document.cookie = 'tracker_cookie=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration('/tracker-sw.js');
+          if (reg && reg.active) {
+            const mc = new MessageChannel();
+            mc.port1.onmessage = () => location.reload();
+            reg.active.postMessage({ type: 'clear' }, [mc.port2]);
+            return;
+          }
+        }
+      } catch {}
       location.reload();
     }
 
@@ -476,9 +517,9 @@ app.get("/embed", (c) => {
         }
       } catch (e) {}
 
-      // No data found - show button for SAA
-      document.getElementById('btn').className = 'btn';
-      document.getElementById('status').textContent = 'Click to grant storage access';
+      // No data found - send result immediately
+      document.getElementById('status').textContent = 'No tracking data';
+      window.parent.postMessage({ type: 'saa_result', found: false, fpMatch: false, visits: [] }, '*');
     }
 
     async function requestAccess() {
@@ -596,45 +637,208 @@ app.get("/fingerprint-receiver", (c) => {
 });
 
 app.get("/sw-register", (c) => {
-	const page = html`
-<!DOCTYPE html>
+	const page = `<!DOCTYPE html>
 <html>
 <head><title>SW Register</title></head>
 <body>
 <script>
-  const STORAGE_KEY = '${STORAGE_KEY}';
-
-  async function registerSW() {
-    try {
-      if (!('serviceWorker' in navigator)) {
-        throw new Error('Service Worker not supported');
-      }
-
-      const visits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      visits.push({ source: 'sw', timestamp: new Date().toISOString(), method: 'serviceworker' });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
-
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'sw_flag_set', success: true }, '*');
-      }
-    } catch (e) {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'sw_error', error: e.message }, '*');
-      }
+(async function() {
+  try {
+    if (!('serviceWorker' in navigator)) {
+      throw new Error('Service Worker not supported');
     }
-  }
+    const reg = await navigator.serviceWorker.register('/tracker-sw.js');
+    await navigator.serviceWorker.ready;
 
-  registerSW();
+    const sw = reg.active || reg.waiting || reg.installing;
+    if (!sw) throw new Error('SW not available');
+
+    const mc = new MessageChannel();
+    mc.port1.onmessage = (e) => {
+      window.parent.postMessage({ type: 'sw_flag_set', success: true, data: e.data }, '*');
+    };
+    sw.postMessage({ type: 'set_visit', source: 'landing' }, [mc.port2]);
+  } catch (e) {
+    window.parent.postMessage({ type: 'sw_error', error: e.message }, '*');
+  }
+})();
 </script>
 </body>
-</html>
+</html>`;
+	return new Response(page, {
+		headers: { "Content-Type": "text/html" },
+	});
+});
+
+app.get("/tracker-sw.js", (c) => {
+	const sw = `
+const CACHE_NAME = 'tracker-visits-v1';
+
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
+});
+
+self.addEventListener('message', async (e) => {
+  if (e.data && e.data.type === 'set_visit') {
+    const cache = await caches.open(CACHE_NAME);
+    const visits = await getVisits(cache);
+    visits.push({ source: e.data.source, timestamp: new Date().toISOString(), method: 'serviceworker' });
+    await cache.put('/visits.json', new Response(JSON.stringify(visits)));
+    e.ports[0].postMessage({ success: true, count: visits.length });
+  }
+  if (e.data && e.data.type === 'get_visits') {
+    const cache = await caches.open(CACHE_NAME);
+    const visits = await getVisits(cache);
+    e.ports[0].postMessage({ visits });
+  }
+  if (e.data && e.data.type === 'clear') {
+    await caches.delete(CACHE_NAME);
+    e.ports[0].postMessage({ cleared: true });
+  }
+});
+
+async function getVisits(cache) {
+  try {
+    const res = await cache.match('/visits.json');
+    if (res) return await res.json();
+  } catch {}
+  return [];
+}
 `;
-	return c.html(page.toString());
+	return new Response(sw, {
+		headers: {
+			"Content-Type": "application/javascript",
+			"Service-Worker-Allowed": "/",
+		},
+	});
+});
+
+app.get("/sw-check", (c) => {
+	const page = `<!DOCTYPE html>
+<html>
+<head><title>SW Check</title></head>
+<body>
+<script>
+(async function() {
+  try {
+    if (!('serviceWorker' in navigator)) {
+      throw new Error('Service Worker not supported');
+    }
+    const reg = await navigator.serviceWorker.getRegistration('/tracker-sw.js');
+    if (!reg || !reg.active) {
+      window.parent.postMessage({ type: 'sw_check_result', found: false }, '*');
+      return;
+    }
+    const mc = new MessageChannel();
+    mc.port1.onmessage = (e) => {
+      const visits = e.data.visits || [];
+      window.parent.postMessage({ type: 'sw_check_result', found: visits.length > 0, visits }, '*');
+    };
+    reg.active.postMessage({ type: 'get_visits' }, [mc.port2]);
+  } catch (e) {
+    window.parent.postMessage({ type: 'sw_check_result', found: false, error: e.message }, '*');
+  }
+})();
+</script>
+</body>
+</html>`;
+	return new Response(page, {
+		headers: { "Content-Type": "text/html" },
+	});
+});
+
+app.get("/shared-storage-worklet.js", (c) => {
+	const worklet = `
+class CheckTrackedOperation {
+  async run(urls) {
+    const tracked = await sharedStorage.get('tracker_visited');
+    return tracked === 'true' ? 0 : 1;
+  }
+}
+register('check-tracked', CheckTrackedOperation);
+`;
+	return new Response(worklet, {
+		headers: {
+			"Content-Type": "application/javascript",
+			"Access-Control-Allow-Origin": "*",
+			"Shared-Storage-Cross-Origin-Worklet-Allowed": "?1",
+		},
+	});
+});
+
+app.get("/ss-tracked", (c) => {
+	const page = `<!DOCTYPE html>
+<html><head><title>Tracked</title></head>
+<body>
+<script>
+window.parent.postMessage({ type: 'shared_storage_result', tracked: true }, '*');
+</script>
+</body></html>`;
+	return new Response(page, {
+		headers: {
+			"Content-Type": "text/html",
+			"Supports-Loading-Mode": "fenced-frame",
+		},
+	});
+});
+
+app.get("/ss-not-tracked", (c) => {
+	const page = `<!DOCTYPE html>
+<html><head><title>Not Tracked</title></head>
+<body>
+<script>
+window.parent.postMessage({ type: 'shared_storage_result', tracked: false }, '*');
+</script>
+</body></html>`;
+	return new Response(page, {
+		headers: {
+			"Content-Type": "text/html",
+			"Supports-Loading-Mode": "fenced-frame",
+		},
+	});
+});
+
+app.get("/ss-set", (c) => {
+	const page = `<!DOCTYPE html>
+<html><head><title>Set Shared Storage</title></head>
+<body>
+<script>
+(async () => {
+  try {
+    if (!window.sharedStorage) {
+      window.parent.postMessage({ type: 'ss_set_result', success: false, error: 'Shared Storage not supported' }, '*');
+      return;
+    }
+    await window.sharedStorage.set('tracker_visited', 'true');
+    window.parent.postMessage({ type: 'ss_set_result', success: true }, '*');
+  } catch (e) {
+    window.parent.postMessage({ type: 'ss_set_result', success: false, error: e.message }, '*');
+  }
+})();
+</script>
+</body></html>`;
+	return c.html(page);
 });
 
 export default app;
 
+const tls = await (async () => {
+	try {
+		const key = Bun.file("certs/key.pem");
+		const cert = Bun.file("certs/cert.pem");
+		if (await key.exists() && await cert.exists()) {
+			return { key, cert };
+		}
+	} catch {}
+	return undefined;
+})();
+
 export const server = {
 	port: 3002,
 	fetch: app.fetch.bind(app),
+	...(tls && { tls }),
 };

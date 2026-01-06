@@ -115,6 +115,13 @@ app.get("/", (c) => {
       <div id="fingerprint-data" class="result-data" style="display:none"></div>
     </div>
 
+    <div class="test" id="test-sharedstorage">
+      <h3>Shared Storage API</h3>
+      <p>Chrome Privacy Sandbox - cross-site storage that survives cookie blocking</p>
+      <button onclick="runSharedStorage()">Run</button>
+      <div id="sharedstorage-status" class="status pending">Not run</div>
+    </div>
+
     <div class="test" id="test-tracker" style="background: #1a0a2e; border-color: #4a1a7e;">
       <h3>Central Tracker</h3>
       <p>Redirect to Tracker server, register visit in Tracker's first-party storage</p>
@@ -301,26 +308,32 @@ app.get("/", (c) => {
         const iframe = document.createElement('iframe');
         iframe.src = TRACKER + '/sw-register';
         iframe.style.display = 'none';
+
+        iframe.onerror = () => {
+          setStatus('sw', 'failed', 'Iframe failed to load - accept cert at ' + TRACKER);
+          resolve({ success: false, error: 'iframe_error' });
+        };
+
         document.body.appendChild(iframe);
 
         const timeout = setTimeout(() => {
-          setStatus('sw', 'failed', 'Timeout - no response');
+          setStatus('sw', 'failed', 'Timeout - visit ' + TRACKER + ' to accept cert');
           iframe.remove();
           resolve({ success: false, error: 'timeout' });
-        }, 10000);
+        }, 5000);
 
         window.addEventListener('message', function handler(e) {
           if (e.data && e.data.type === 'sw_flag_set') {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
-            setStatus('sw', 'success', 'Service Worker registered and flag written!', e.data);
+            setStatus('sw', 'success', 'Flag written to Tracker storage', e.data);
             iframe.remove();
             resolve({ success: true, data: e.data });
           }
           if (e.data && e.data.type === 'sw_error') {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
-            setStatus('sw', 'failed', 'SW error: ' + e.data.error, e.data);
+            setStatus('sw', 'failed', e.data.error, e.data);
             iframe.remove();
             resolve({ success: false, error: e.data.error });
           }
@@ -394,6 +407,38 @@ app.get("/", (c) => {
       }
     }
 
+    function runSharedStorage() {
+      return new Promise((resolve) => {
+        setStatus('sharedstorage', 'running', 'Loading iframe...');
+
+        const iframe = document.createElement('iframe');
+        iframe.src = TRACKER + '/ss-set';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const timeout = setTimeout(() => {
+          setStatus('sharedstorage', 'failed', 'Timeout - no response');
+          iframe.remove();
+          resolve({ success: false, error: 'timeout' });
+        }, 5000);
+
+        window.addEventListener('message', function handler(e) {
+          if (e.data && e.data.type === 'ss_set_result') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            iframe.remove();
+            if (e.data.success) {
+              setStatus('sharedstorage', 'success', 'Shared Storage set!');
+              resolve({ success: true });
+            } else {
+              setStatus('sharedstorage', 'failed', e.data.error || 'Failed');
+              resolve({ success: false, error: e.data.error });
+            }
+          }
+        });
+      });
+    }
+
     async function runTracker() {
       setStatus('tracker', 'running', 'Redirecting to Tracker...');
       const fp = await generateFingerprint();
@@ -413,6 +458,9 @@ app.get("/", (c) => {
 
       const sw = await runServiceWorker();
       if (sw.success) results.push('serviceworker');
+
+      const ss = await runSharedStorage();
+      if (ss.success) results.push('sharedstorage');
 
       await runFingerprint();
 
@@ -513,7 +561,19 @@ checkSW();
 
 export default app;
 
+const tls = await (async () => {
+	try {
+		const key = Bun.file("certs/key.pem");
+		const cert = Bun.file("certs/cert.pem");
+		if (await key.exists() && await cert.exists()) {
+			return { key, cert };
+		}
+	} catch {}
+	return undefined;
+})();
+
 export const server = {
 	port: 3000,
 	fetch: app.fetch.bind(app),
+	...(tls && { tls }),
 };

@@ -28,6 +28,7 @@ Detects if user visited Landing before going to Casino.
 
 ## Files
 
-- `src/serverA.ts` - Landing
-- `src/serverT.ts` - Tracker
-- `src/serverX.ts` - Casino
+- `src/serverA.ts` - Landing (port 3000)
+- `src/serverB.ts` - Game Provider (port 3003) - embedded in Casino, calls Tracker
+- `src/serverT.ts` - Tracker (port 3002)
+- `src/serverX.ts` - Casino (port 3001) - embeds Game Provider iframe

@@ -2,8 +2,8 @@ FROM oven/bun:1 AS base
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile || bun install
 
 FROM base AS runner
 WORKDIR /app
@@ -11,8 +11,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ENV NODE_ENV=production
+EXPOSE 3000 3001 3002 3003
 
-EXPOSE 3000
-
-CMD ["bun", "run", "src/devA.ts"]
+CMD ["bun", "run", "src/devT.ts"]
