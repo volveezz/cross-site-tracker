@@ -143,10 +143,14 @@ iframe.<span class="prop">src</span> = <span class="str">'${TRACKER_URL}/embed?f
         hasCookie = data.cookieReceived;
       } catch {}
 
-      infoEl.textContent = hasCookie ? 'Cookie found, loading methods...' : 'Loading methods...';
-
       checkSharedStorage();
-      showSAAIframe(hasCookie);
+
+      if (hasCookie) {
+        showResult({ found: true, method: 'cookie', fpMatch: false, visits: [] });
+      } else {
+        infoEl.textContent = 'Checking storage...';
+        showSAAIframe(false);
+      }
     }
 
     async function checkSharedStorage() {
