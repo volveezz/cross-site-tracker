@@ -72,6 +72,10 @@ app.get("/", (c) => {
         <span id="dnt-status" class="badge badge-warn">Checking...</span>
       </div>
       <div class="status-row">
+        <span>3rd-party Cookies</span>
+        <span id="cookie-status" class="badge badge-warn">N/A (first-party)</span>
+      </div>
+      <div class="status-row">
         <span>Storage Access API</span>
         <span id="saa-perm" class="badge badge-warn">Checking...</span>
       </div>
