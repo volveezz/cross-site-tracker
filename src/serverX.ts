@@ -63,103 +63,54 @@ app.get("/tests", (c) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casino - Tests</title>
+  <title>Casino - Check</title>
   <style>
     body { font-family: system-ui; padding: 16px; margin: 0; background: #000; color: #e0e0e0; }
     h2 { color: #fff; margin: 0 0 16px 0; }
-    .detection { padding: 16px; margin-bottom: 16px; }
-    .detected { background: #0a2f0a; border: 2px solid #4caf50; }
-    .not-detected { background: #2f0a0a; border: 2px solid #f44336; }
-    .pending { background: #1a0a2e; border: 2px solid #4a1a7e; }
-    .tests { display: grid; gap: 12px; }
-    .test { padding: 12px; background: #111; border: 1px solid #333; }
-    .test-header { display: flex; justify-content: space-between; align-items: center; }
-    .test-name { font-weight: bold; color: #fff; }
-    .badge { padding: 4px 8px; font-size: 12px; }
-    .badge-success { background: #4caf50; color: #000; }
-    .badge-failed { background: #f44336; color: #fff; }
-    .badge-pending { background: #444; color: #888; }
-    .data { font-family: monospace; font-size: 11px; background: #0a0a0a; padding: 8px; margin-top: 8px; border: 1px solid #222; color: #aaa; word-break: break-all; }
-    button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; margin-right: 8px; margin-top: 8px; }
+    .result { padding: 16px; margin-bottom: 16px; }
+    .tracked { background: #0a2f0a; border: 2px solid #4caf50; }
+    .not-tracked { background: #2f0a0a; border: 2px solid #f44336; }
+    .checking { background: #1a0a2e; border: 2px solid #4a1a7e; }
+    .result-title { font-size: 24px; font-weight: bold; margin-bottom: 8px; }
+    .result-info { font-size: 14px; color: #aaa; }
+    .section { padding: 12px; background: #111; border: 1px solid #333; margin-bottom: 12px; }
+    .section-title { font-weight: bold; color: #fff; margin-bottom: 8px; }
+    .data { font-family: monospace; font-size: 11px; background: #0a0a0a; padding: 8px; border: 1px solid #222; color: #aaa; white-space: pre-wrap; word-break: break-all; }
+    .visit { padding: 8px; background: #0a0a0a; border: 1px solid #222; margin-bottom: 4px; }
+    .visit-method { color: #4caf50; font-weight: bold; }
+    .visit-time { color: #888; font-size: 12px; }
+    .fp-status { padding: 8px; }
+    .fp-match { background: #0a2f0a; color: #4caf50; }
+    .fp-no-match { background: #2f1a0a; color: #ff9800; }
+    button { padding: 8px 16px; cursor: pointer; border: 1px solid #444; background: #222; color: #e0e0e0; }
     button:hover { background: #333; }
-    .btn-primary { background: #7c4dff; border-color: #7c4dff; }
-    .btn-primary:hover { background: #651fff; }
   </style>
 </head>
 <body>
-  <h2>Tracking Tests</h2>
+  <h2>Tracking Check</h2>
 
-  <div id="detection" class="detection pending">
-    <strong id="detection-title">Not checked</strong>
-    <p id="detection-desc" style="margin: 4px 0 0 0; font-size: 14px;">Click "Check Tracker" to detect visits</p>
+  <div id="result" class="result checking">
+    <div class="result-title" id="result-title">Checking...</div>
+    <div class="result-info" id="result-info">Loading tracking data from Tracker</div>
   </div>
 
-  <div class="tests">
-    <div class="test">
-      <div class="test-header">
-        <span class="test-name">Redirect Check</span>
-        <span id="redirect-badge" class="badge badge-pending">-</span>
-      </div>
-      <p style="font-size: 12px; color: #888; margin: 4px 0;">Redirect to Tracker, check localStorage</p>
-      <button class="btn-primary" onclick="checkViaRedirect()">Check Tracker</button>
-      <div id="redirect-data" class="data" style="display:none"></div>
-    </div>
+  <div id="visits-section" class="section" style="display:none">
+    <div class="section-title">Visits (<span id="visit-count">0</span>)</div>
+    <div id="visits-list"></div>
+  </div>
 
-    <div class="test">
-      <div class="test-header">
-        <span class="test-name">Iframe Check</span>
-        <span id="iframe-badge" class="badge badge-pending">-</span>
-      </div>
-      <p style="font-size: 12px; color: #888; margin: 4px 0;">Load Tracker iframe, postMessage result (partitioned)</p>
-      <button onclick="checkViaIframe()">Check</button>
-      <div id="iframe-data" class="data" style="display:none"></div>
-    </div>
-
-    <div class="test">
-      <div class="test-header">
-        <span class="test-name">Fingerprint Match</span>
-        <span id="fp-badge" class="badge badge-pending">-</span>
-      </div>
-      <p style="font-size: 12px; color: #888; margin: 4px 0;">Compare fingerprint with Tracker's stored hashes</p>
-      <button onclick="checkFingerprint()">Check</button>
-      <div id="fp-data" class="data" style="display:none"></div>
-    </div>
+  <div id="fp-section" class="section" style="display:none">
+    <div class="section-title">Fingerprint</div>
+    <div id="fp-result"></div>
   </div>
 
   <div style="margin-top: 16px;">
+    <button onclick="runCheck()">Re-check</button>
     <button onclick="location.reload()">Refresh</button>
   </div>
 
   <script>
     const TRACKER = '${TRACKER_URL}';
-
-    function setBadge(id, status, text) {
-      const badge = document.getElementById(id + '-badge');
-      badge.className = 'badge badge-' + status;
-      badge.textContent = text;
-    }
-
-    function setData(id, data) {
-      const el = document.getElementById(id + '-data');
-      el.style.display = 'block';
-      el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-    }
-
-    function updateDetection(found, method) {
-      const det = document.getElementById('detection');
-      const title = document.getElementById('detection-title');
-      const desc = document.getElementById('detection-desc');
-
-      if (found) {
-        det.className = 'detection detected';
-        title.textContent = 'User Tracked!';
-        desc.textContent = 'Detected via: ' + method;
-      } else {
-        det.className = 'detection not-detected';
-        title.textContent = 'Not Tracked';
-        desc.textContent = 'No tracking data found';
-      }
-    }
 
     async function generateFingerprint() {
       const components = [];
@@ -188,80 +139,75 @@ app.get("/tests", (c) => {
         .map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    function parseUrlResult() {
-      const params = new URLSearchParams(window.location.search);
-      const result = params.get('tracker_result');
-      if (result) {
-        try {
-          const data = JSON.parse(result);
-          setBadge('redirect', data.found ? 'success' : 'failed', data.found ? 'TRACKED' : 'not found');
-          setData('redirect', data);
-          updateDetection(data.found || data.fpMatch, 'redirect');
-          history.replaceState({}, '', window.location.pathname);
-        } catch (e) {}
+    async function runCheck() {
+      const resultEl = document.getElementById('result');
+      const titleEl = document.getElementById('result-title');
+      const infoEl = document.getElementById('result-info');
+
+      resultEl.className = 'result checking';
+      titleEl.textContent = 'Checking...';
+      infoEl.textContent = 'Loading tracking data from Tracker';
+
+      const fp = await generateFingerprint();
+
+      const iframe = document.createElement('iframe');
+      iframe.src = TRACKER + '/iframe-check';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const timeout = setTimeout(() => {
+        iframe.remove();
+        showResult({ found: false, visits: [], fps: [], error: 'timeout' }, fp);
+      }, 5000);
+
+      window.addEventListener('message', function handler(e) {
+        if (e.data && e.data.type === 'tracker_check_result') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          iframe.remove();
+          showResult(e.data, fp);
+        }
+      });
+    }
+
+    function showResult(data, currentFp) {
+      const resultEl = document.getElementById('result');
+      const titleEl = document.getElementById('result-title');
+      const infoEl = document.getElementById('result-info');
+      const visitsSection = document.getElementById('visits-section');
+      const visitsList = document.getElementById('visits-list');
+      const visitCount = document.getElementById('visit-count');
+      const fpSection = document.getElementById('fp-section');
+      const fpResult = document.getElementById('fp-result');
+
+      const fpMatch = data.fps && data.fps.includes(currentFp);
+      const tracked = data.found || fpMatch;
+
+      resultEl.className = 'result ' + (tracked ? 'tracked' : 'not-tracked');
+      titleEl.textContent = tracked ? 'User Tracked' : 'Not Tracked';
+
+      const methods = [...new Set(data.visits.map(v => v.method))];
+      infoEl.textContent = tracked
+        ? 'Methods: ' + methods.join(', ') + (fpMatch ? ' + fingerprint match' : '')
+        : 'No tracking data found';
+
+      if (data.visits.length > 0) {
+        visitsSection.style.display = 'block';
+        visitCount.textContent = data.visits.length;
+        visitsList.innerHTML = data.visits.map(v =>
+          '<div class="visit"><span class="visit-method">' + v.method + '</span> ' +
+          '<span class="visit-time">' + new Date(v.timestamp).toLocaleString() + '</span></div>'
+        ).join('');
       }
+
+      fpSection.style.display = 'block';
+      fpResult.className = 'fp-status ' + (fpMatch ? 'fp-match' : 'fp-no-match');
+      fpResult.textContent = fpMatch
+        ? 'Fingerprint matches stored hash'
+        : 'Fingerprint not found in stored hashes';
     }
 
-    async function checkViaRedirect() {
-      setBadge('redirect', 'pending', 'redirecting...');
-      const fp = await generateFingerprint();
-      const returnUrl = window.location.href.split('?')[0];
-      window.location.href = TRACKER + '/check?fp=' + fp + '&return=' + encodeURIComponent(returnUrl);
-    }
-
-    function checkViaIframe() {
-      setBadge('iframe', 'pending', 'loading...');
-      const iframe = document.createElement('iframe');
-      iframe.src = TRACKER + '/iframe-check';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-
-      const timeout = setTimeout(() => {
-        setBadge('iframe', 'failed', 'timeout');
-        iframe.remove();
-      }, 5000);
-
-      window.addEventListener('message', function handler(e) {
-        if (e.data && e.data.type === 'tracker_check_result') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-          setBadge('iframe', e.data.found ? 'success' : 'failed', e.data.found ? 'TRACKED' : 'not found');
-          setData('iframe', e.data);
-          if (e.data.found) updateDetection(true, 'iframe');
-          iframe.remove();
-        }
-      });
-    }
-
-    async function checkFingerprint() {
-      setBadge('fp', 'pending', 'checking...');
-      const fp = await generateFingerprint();
-
-      const iframe = document.createElement('iframe');
-      iframe.src = TRACKER + '/iframe-check';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-
-      const timeout = setTimeout(() => {
-        setBadge('fp', 'failed', 'timeout');
-        iframe.remove();
-      }, 5000);
-
-      window.addEventListener('message', function handler(e) {
-        if (e.data && e.data.type === 'tracker_check_result') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-
-          const fpMatch = e.data.fps && e.data.fps.includes(fp);
-          setBadge('fp', fpMatch ? 'success' : 'failed', fpMatch ? 'MATCH' : 'no match');
-          setData('fp', { currentFp: fp, storedFps: e.data.fps || [], match: fpMatch });
-          if (fpMatch) updateDetection(true, 'fingerprint');
-          iframe.remove();
-        }
-      });
-    }
-
-    parseUrlResult();
+    runCheck();
   </script>
 </body>
 </html>

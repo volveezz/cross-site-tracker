@@ -171,9 +171,14 @@ app.get("/iframe-check", (c) => {
 </head>
 <body>
   <script>
-    let result = { found: false, visits: [], fps: [], error: null };
+    let result = { found: false, visits: [], fps: [], error: null, debug: {} };
 
     try {
+      result.debug.hasLocalStorage = typeof localStorage !== 'undefined';
+      result.debug.allKeys = Object.keys(localStorage);
+      result.debug.rawVisits = localStorage.getItem('${STORAGE_KEY}');
+      result.debug.rawFps = localStorage.getItem('${FP_KEY}');
+
       const visits = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '[]');
       const fps = JSON.parse(localStorage.getItem('${FP_KEY}') || '[]');
       result.visits = visits;
