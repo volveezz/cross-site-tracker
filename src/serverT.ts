@@ -517,9 +517,9 @@ app.get("/embed", (c) => {
         }
       } catch (e) {}
 
-      // No data found - send result immediately
-      document.getElementById('status').textContent = 'No tracking data';
-      window.parent.postMessage({ type: 'saa_result', found: false, fpMatch: false, visits: [] }, '*');
+      // No data found - show SAA button
+      document.getElementById('btn').className = 'btn';
+      document.getElementById('status').textContent = 'Click to check with Storage Access';
     }
 
     async function requestAccess() {
