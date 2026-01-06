@@ -11,6 +11,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-EXPOSE 3000 3001 3002 3003
+ENV PORT=3000
 
-CMD ["bun", "run", "src/devT.ts"]
+EXPOSE 3000
+
+CMD ["bun", "run", "src/devA.ts"]
