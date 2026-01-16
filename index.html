@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Tracker QA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a0a; color: #e5e5e5; padding: 20px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 20px; color: #fff; }
+    h2 { font-size: 1.1rem; margin-bottom: 12px; color: #a1a1aa; }
+
+    .config { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .config label { display: block; margin-bottom: 4px; font-size: 0.875rem; color: #a1a1aa; }
+    .config input { width: 100%; padding: 10px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #fff; font-size: 0.875rem; margin-bottom: 12px; }
+    .config input:focus { outline: none; border-color: #6366f1; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-title { font-weight: 600; color: #fff; }
+    .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; }
+    .badge-success { background: #166534; color: #86efac; }
+    .badge-error { background: #991b1b; color: #fca5a5; }
+    .badge-pending { background: #3f3f46; color: #a1a1aa; }
+
+    .btn { padding: 10px 16px; border: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-primary:disabled { background: #3f3f46; cursor: not-allowed; }
+    .btn-secondary { background: #27272a; color: #e5e5e5; }
+    .btn-secondary:hover { background: #3f3f46; }
+    .btn-danger { background: #991b1b; color: #fff; }
+    .btn-danger:hover { background: #7f1d1d; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .state { margin-top: 12px; }
+    .state-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #27272a; font-size: 0.875rem; }
+    .state-item:last-child { border-bottom: none; }
+    .state-label { color: #a1a1aa; }
+    .state-value { color: #fff; font-family: monospace; word-break: break-all; max-width: 60%; text-align: right; }
+
+    .log { background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-top: 20px; max-height: 400px; overflow-y: auto; }
+    .log-entry { font-family: monospace; font-size: 0.8rem; padding: 8px; border-bottom: 1px solid #18181b; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: #6366f1; }
+    .log-method { font-weight: 600; }
+    .log-method.GET { color: #22c55e; }
+    .log-method.POST { color: #f59e0b; }
+    .log-url { color: #a1a1aa; }
+    .log-status { margin-left: 8px; }
+    .log-status.ok { color: #22c55e; }
+    .log-status.err { color: #ef4444; }
+    .log-body { margin-top: 4px; color: #71717a; white-space: pre-wrap; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; background: transparent; border: none; color: #a1a1aa; cursor: pointer; border-radius: 6px; font-size: 0.875rem; }
+    .tab.active { background: #27272a; color: #fff; }
+    .tab:hover:not(.active) { color: #e5e5e5; }
+
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .info { background: #1e1b4b; border: 1px solid #4338ca; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.875rem; color: #a5b4fc; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>User Tracker QA Test Environment</h1>
+
+    <div class="config">
+      <label for="apiUrl">API Base URL</label>
+      <input type="text" id="apiUrl" placeholder="https://your-tracker-api.com">
+      <div class="info">Enter the deployed tracker API URL. All endpoints (/track, /verify, /lookup) will use this base.</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="landing">Landing Page</button>
+      <button class="tab" data-tab="provider">Provider Page</button>
+      <button class="tab" data-tab="lookup">Lookup</button>
+      <button class="tab" data-tab="state">State</button>
+    </div>
+
+    <div id="landing" class="section active">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">POST /track</span>
+          <span id="trackBadge" class="badge badge-pending">Not called</span>
+        </div>
+        <p style="color: #a1a1aa; font-size: 0.875rem; margin-bottom: 12px;">
+          Simulates landing page tracking. Generates fingerprint, sends to API, receives visitor ID and cookie.
+        </p>
+        <div class="actions">
+          <button class="btn btn-primary" id="trackBtn">Track Visitor</button>
+          <button class="btn btn-secondary" id="regenFp">Regenerate Fingerprint</button>
+        </div>
+        <div class="state" id="trackState"></div>
+      </div>
+    </div>
+
+    <div id="provider" class="section">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">GET /verify</span>
+          <span id="verifyBadge" class="badge badge-pending">Not called</span>
+        </div>
+        <p style="color: #a1a1aa; font-size: 0.875rem; margin-bottom: 12px;">
+          Simulates provider verification. Checks if visitor is tracked via cookie or fingerprint fallback.
+        </p>
+        <div class="actions">
+          <button class="btn btn-primary" id="verifyBtn">Verify (Cookie)</button>
+          <button class="btn btn-secondary" id="verifyFpBtn">Verify (Fingerprint)</button>
+        </div>
+        <div class="state" id="verifyState"></div>
+      </div>
+    </div>
+
+    <div id="lookup" class="section">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">GET /lookup</span>
+          <span id="lookupBadge" class="badge badge-pending">Not called</span>
+        </div>
+        <p style="color: #a1a1aa; font-size: 0.875rem; margin-bottom: 12px;">
+          Internal lookup by fingerprint or IP.
+        </p>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: #a1a1aa;">Lookup by</label>
+          <select id="lookupType" style="padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #fff;">
+            <option value="fingerprint">Fingerprint</option>
+            <option value="ip">IP</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="lookupBtn">Lookup</button>
+        </div>
+        <div class="state" id="lookupState"></div>
+      </div>
+    </div>
+
+    <div id="state" class="section">
+      <div class="grid">
+        <div class="card">
+          <h2>Local State</h2>
+          <div class="state">
+            <div class="state-item">
+              <span class="state-label">Fingerprint</span>
+              <span class="state-value" id="fpValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Visitor ID</span>
+              <span class="state-value" id="vidValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Cookie (_tv)</span>
+              <span class="state-value" id="cookieValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Is New</span>
+              <span class="state-value" id="isNewValue">-</span>
+            </div>
+          </div>
+          <div class="actions" style="margin-top: 12px;">
+            <button class="btn btn-danger" id="clearBtn">Clear All State</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Browser Info</h2>
+          <div class="state">
+            <div class="state-item">
+              <span class="state-label">User Agent</span>
+              <span class="state-value" id="uaValue" style="font-size: 0.7rem;">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Platform</span>
+              <span class="state-value" id="platValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Language</span>
+              <span class="state-value" id="langValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Screen</span>
+              <span class="state-value" id="screenValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">Timezone</span>
+              <span class="state-value" id="tzValue">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="log" id="log">
+      <div style="color: #a1a1aa; font-size: 0.875rem;">Request log will appear here...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    let state = {
+      fingerprint: localStorage.getItem('qa_fingerprint') || null,
+      visitorId: localStorage.getItem('qa_visitorId') || null,
+      isNew: null,
+    };
+
+    const getApiUrl = () => {
+      const url = $('#apiUrl').value.trim();
+      return url.endsWith('/') ? url.slice(0, -1) : url;
+    };
+
+    const generateFingerprint = async () => {
+      const components = [
+        navigator.userAgent,
+        navigator.language,
+        navigator.platform,
+        screen.width + 'x' + screen.height,
+        screen.colorDepth,
+        new Date().getTimezoneOffset(),
+        navigator.hardwareConcurrency || 0,
+        navigator.deviceMemory || 0,
+      ].join('|');
+
+      const encoder = new TextEncoder();
+      const data = encoder.encode(components);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    const getCookie = (name) => {
+      const match = document.cookie.match(new RegExp(`${name}=([^;]+)`));
+      return match?.[1] || null;
+    };
+
+    const log = (method, url, status, body, responseBody) => {
+      const logEl = $('#log');
+      const time = new Date().toLocaleTimeString();
+      const statusClass = status >= 200 && status < 300 ? 'ok' : 'err';
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">[${time}]</span>
+        <span class="log-method ${method}">${method}</span>
+        <span class="log-url">${url}</span>
+        <span class="log-status ${statusClass}">${status}</span>
+        ${body ? `<div class="log-body">Request: ${JSON.stringify(body, null, 2)}</div>` : ''}
+        ${responseBody ? `<div class="log-body">Response: ${JSON.stringify(responseBody, null, 2)}</div>` : ''}
+      `;
+
+      if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Request log')) {
+        logEl.innerHTML = '';
+      }
+      logEl.insertBefore(entry, logEl.firstChild);
+    };
+
+    const updateState = () => {
+      $('#fpValue').textContent = state.fingerprint ? state.fingerprint.slice(0, 16) + '...' : '-';
+      $('#vidValue').textContent = state.visitorId || '-';
+      $('#cookieValue').textContent = getCookie('_tv') || '-';
+      $('#isNewValue').textContent = state.isNew !== null ? String(state.isNew) : '-';
+
+      $('#uaValue').textContent = navigator.userAgent.slice(0, 50) + '...';
+      $('#platValue').textContent = navigator.platform;
+      $('#langValue').textContent = navigator.language;
+      $('#screenValue').textContent = `${screen.width}x${screen.height}`;
+      $('#tzValue').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      if (state.fingerprint) localStorage.setItem('qa_fingerprint', state.fingerprint);
+      if (state.visitorId) localStorage.setItem('qa_visitorId', state.visitorId);
+    };
+
+    const setBadge = (id, success, text) => {
+      const badge = $(`#${id}Badge`);
+      badge.className = `badge ${success ? 'badge-success' : 'badge-error'}`;
+      badge.textContent = text;
+    };
+
+    const renderState = (containerId, data) => {
+      const container = $(`#${containerId}`);
+      container.innerHTML = Object.entries(data).map(([k, v]) => `
+        <div class="state-item">
+          <span class="state-label">${k}</span>
+          <span class="state-value">${typeof v === 'object' ? JSON.stringify(v) : v}</span>
+        </div>
+      `).join('');
+    };
+
+    $('#trackBtn').onclick = async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) return alert('Enter API URL first');
+
+      if (!state.fingerprint) {
+        state.fingerprint = await generateFingerprint();
+      }
+
+      const body = {
+        fingerprint: state.fingerprint,
+        cookieStatus: 'success',
+      };
+
+      try {
+        const res = await fetch(`${apiUrl}/track`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+        log('POST', '/track', res.status, body, data);
+
+        if (res.ok) {
+          state.visitorId = data.visitorId;
+          state.isNew = data.isNew;
+          setBadge('track', true, data.isNew ? 'New visitor' : 'Existing');
+          renderState('trackState', data);
+        } else {
+          setBadge('track', false, 'Error');
+          renderState('trackState', data);
+        }
+      } catch (e) {
+        log('POST', '/track', 0, body, { error: e.message });
+        setBadge('track', false, 'Failed');
+        renderState('trackState', { error: e.message });
+      }
+
+      updateState();
+    };
+
+    $('#regenFp').onclick = async () => {
+      state.fingerprint = await generateFingerprint();
+      updateState();
+      alert('Fingerprint regenerated');
+    };
+
+    $('#verifyBtn').onclick = async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) return alert('Enter API URL first');
+
+      try {
+        const res = await fetch(`${apiUrl}/verify`, {
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+        log('GET', '/verify', res.status, null, data);
+
+        setBadge('verify', data.tracked, data.tracked ? 'Tracked' : 'Not tracked');
+        renderState('verifyState', data);
+      } catch (e) {
+        log('GET', '/verify', 0, null, { error: e.message });
+        setBadge('verify', false, 'Failed');
+        renderState('verifyState', { error: e.message });
+      }
+    };
+
+    $('#verifyFpBtn').onclick = async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) return alert('Enter API URL first');
+      if (!state.fingerprint) return alert('Generate fingerprint first');
+
+      try {
+        const res = await fetch(`${apiUrl}/verify?fingerprint=${state.fingerprint}`, {
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+        log('GET', `/verify?fingerprint=${state.fingerprint.slice(0, 8)}...`, res.status, null, data);
+
+        setBadge('verify', data.tracked, data.tracked ? 'Tracked' : 'Not tracked');
+        renderState('verifyState', data);
+      } catch (e) {
+        log('GET', '/verify?fingerprint=...', 0, null, { error: e.message });
+        setBadge('verify', false, 'Failed');
+        renderState('verifyState', { error: e.message });
+      }
+    };
+
+    $('#lookupBtn').onclick = async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) return alert('Enter API URL first');
+
+      const type = $('#lookupType').value;
+      const param = type === 'fingerprint' ? state.fingerprint : null;
+
+      if (type === 'fingerprint' && !param) return alert('Generate fingerprint first');
+
+      const url = type === 'fingerprint'
+        ? `${apiUrl}/lookup?fingerprint=${param}`
+        : `${apiUrl}/lookup?ip=auto`;
+
+      try {
+        const res = await fetch(url, { credentials: 'include' });
+        const data = await res.json();
+
+        log('GET', `/lookup?${type}=...`, res.status, null, data);
+        setBadge('lookup', res.ok, res.ok ? 'Found' : 'Not found');
+        renderState('lookupState', data);
+      } catch (e) {
+        log('GET', `/lookup?${type}=...`, 0, null, { error: e.message });
+        setBadge('lookup', false, 'Failed');
+        renderState('lookupState', { error: e.message });
+      }
+    };
+
+    $('#clearBtn').onclick = () => {
+      state = { fingerprint: null, visitorId: null, isNew: null };
+      localStorage.removeItem('qa_fingerprint');
+      localStorage.removeItem('qa_visitorId');
+      document.cookie = '_tv=; Max-Age=0; Path=/';
+      updateState();
+      alert('State cleared');
+    };
+
+    $$('.tab').forEach(tab => {
+      tab.onclick = () => {
+        $$('.tab').forEach(t => t.classList.remove('active'));
+        $$('.section').forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        $(`#${tab.dataset.tab}`).classList.add('active');
+      };
+    });
+
+    const savedUrl = localStorage.getItem('qa_apiUrl');
+    if (savedUrl) $('#apiUrl').value = savedUrl;
+    $('#apiUrl').oninput = () => localStorage.setItem('qa_apiUrl', $('#apiUrl').value);
+
+    generateFingerprint().then(fp => {
+      if (!state.fingerprint) state.fingerprint = fp;
+      updateState();
+    });
+  </script>
+</body>
+</html>
