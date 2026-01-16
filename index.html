@@ -124,17 +124,11 @@
           <span id="lookupBadge" class="badge badge-pending">Not called</span>
         </div>
         <p style="color: #a1a1aa; font-size: 0.875rem; margin-bottom: 12px;">
-          Internal lookup by fingerprint or IP.
+          Internal lookup. Uses fingerprint if provided, otherwise uses your request IP.
         </p>
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: #a1a1aa;">Lookup by</label>
-          <select id="lookupType" style="padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #fff;">
-            <option value="fingerprint">Fingerprint</option>
-            <option value="ip">IP</option>
-          </select>
-        </div>
         <div class="actions">
-          <button class="btn btn-primary" id="lookupBtn">Lookup</button>
+          <button class="btn btn-primary" id="lookupFpBtn">Lookup by Fingerprint</button>
+          <button class="btn btn-secondary" id="lookupIpBtn">Lookup by IP (auto)</button>
         </div>
         <div class="state" id="lookupState"></div>
       </div>
@@ -160,6 +154,10 @@
             <div class="state-item">
               <span class="state-label">Is New</span>
               <span class="state-value" id="isNewValue">-</span>
+            </div>
+            <div class="state-item">
+              <span class="state-label">IP (from track)</span>
+              <span class="state-value" id="ipValue">-</span>
             </div>
           </div>
           <div class="actions" style="margin-top: 12px;">
@@ -207,6 +205,7 @@
     let state = {
       fingerprint: localStorage.getItem('qa_fingerprint') || null,
       visitorId: localStorage.getItem('qa_visitorId') || null,
+      ip: localStorage.getItem('qa_ip') || null,
       isNew: null,
     };
 
@@ -266,6 +265,7 @@
       $('#vidValue').textContent = state.visitorId || '-';
       $('#cookieValue').textContent = getCookie('_tv') || '-';
       $('#isNewValue').textContent = state.isNew !== null ? String(state.isNew) : '-';
+      $('#ipValue').textContent = state.ip || '-';
 
       $('#uaValue').textContent = navigator.userAgent.slice(0, 50) + '...';
       $('#platValue').textContent = navigator.platform;
@@ -320,6 +320,8 @@
         if (res.ok) {
           state.visitorId = data.visitorId;
           state.isNew = data.isNew;
+          state.ip = data.ip;
+          localStorage.setItem('qa_ip', data.ip);
           setBadge('track', true, data.isNew ? 'New visitor' : 'Existing');
           renderState('trackState', data);
         } else {
@@ -384,37 +386,48 @@
       }
     };
 
-    $('#lookupBtn').onclick = async () => {
+    $('#lookupFpBtn').onclick = async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl) return alert('Enter API URL first');
-
-      const type = $('#lookupType').value;
-      const param = type === 'fingerprint' ? state.fingerprint : null;
-
-      if (type === 'fingerprint' && !param) return alert('Generate fingerprint first');
-
-      const url = type === 'fingerprint'
-        ? `${apiUrl}/lookup?fingerprint=${param}`
-        : `${apiUrl}/lookup?ip=auto`;
+      if (!state.fingerprint) return alert('Generate fingerprint first');
 
       try {
-        const res = await fetch(url, { credentials: 'include' });
+        const res = await fetch(`${apiUrl}/lookup?fingerprint=${state.fingerprint}`, { credentials: 'include' });
         const data = await res.json();
 
-        log('GET', `/lookup?${type}=...`, res.status, null, data);
+        log('GET', `/lookup?fingerprint=...`, res.status, null, data);
         setBadge('lookup', res.ok, res.ok ? 'Found' : 'Not found');
         renderState('lookupState', data);
       } catch (e) {
-        log('GET', `/lookup?${type}=...`, 0, null, { error: e.message });
+        log('GET', `/lookup?fingerprint=...`, 0, null, { error: e.message });
+        setBadge('lookup', false, 'Failed');
+        renderState('lookupState', { error: e.message });
+      }
+    };
+
+    $('#lookupIpBtn').onclick = async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) return alert('Enter API URL first');
+
+      try {
+        const res = await fetch(`${apiUrl}/lookup`, { credentials: 'include' });
+        const data = await res.json();
+
+        log('GET', `/lookup (by request IP)`, res.status, null, data);
+        setBadge('lookup', res.ok, res.ok ? 'Found' : 'Not found');
+        renderState('lookupState', data);
+      } catch (e) {
+        log('GET', `/lookup`, 0, null, { error: e.message });
         setBadge('lookup', false, 'Failed');
         renderState('lookupState', { error: e.message });
       }
     };
 
     $('#clearBtn').onclick = () => {
-      state = { fingerprint: null, visitorId: null, isNew: null };
+      state = { fingerprint: null, visitorId: null, ip: null, isNew: null };
       localStorage.removeItem('qa_fingerprint');
       localStorage.removeItem('qa_visitorId');
+      localStorage.removeItem('qa_ip');
       document.cookie = '_tv=; Max-Age=0; Path=/';
       updateState();
       alert('State cleared');
