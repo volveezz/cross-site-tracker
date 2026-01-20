@@ -155,10 +155,6 @@
               <span class="state-label">Is New</span>
               <span class="state-value" id="isNewValue">-</span>
             </div>
-            <div class="state-item">
-              <span class="state-label">IP (from track)</span>
-              <span class="state-value" id="ipValue">-</span>
-            </div>
           </div>
           <div class="actions" style="margin-top: 12px;">
             <button class="btn btn-danger" id="clearBtn">Clear All State</button>
@@ -205,7 +201,6 @@
     let state = {
       fingerprint: localStorage.getItem('qa_fingerprint') || null,
       visitorId: localStorage.getItem('qa_visitorId') || null,
-      ip: localStorage.getItem('qa_ip') || null,
       isNew: null,
     };
 
@@ -265,7 +260,6 @@
       $('#vidValue').textContent = state.visitorId || '-';
       $('#cookieValue').textContent = getCookie('_tv') || '-';
       $('#isNewValue').textContent = state.isNew !== null ? String(state.isNew) : '-';
-      $('#ipValue').textContent = state.ip || '-';
 
       $('#uaValue').textContent = navigator.userAgent.slice(0, 50) + '...';
       $('#platValue').textContent = navigator.platform;
@@ -302,8 +296,8 @@
       }
 
       const body = {
-        fingerprint: state.fingerprint,
-        cookieStatus: 'success',
+        fp: state.fingerprint,
+        cs: 'success',
       };
 
       try {
@@ -318,11 +312,9 @@
         log('POST', '/track', res.status, body, data);
 
         if (res.ok) {
-          state.visitorId = data.visitorId;
-          state.isNew = data.isNew;
-          state.ip = data.ip;
-          localStorage.setItem('qa_ip', data.ip);
-          setBadge('track', true, data.isNew ? 'New visitor' : 'Existing');
+          state.visitorId = data.id;
+          state.isNew = data.n;
+          setBadge('track', true, data.n ? 'New visitor' : 'Existing');
           renderState('trackState', data);
         } else {
           setBadge('track', false, 'Error');
@@ -355,7 +347,7 @@
         const data = await res.json();
         log('GET', '/verify', res.status, null, data);
 
-        setBadge('verify', data.tracked, data.tracked ? 'Tracked' : 'Not tracked');
+        setBadge('verify', data.t, data.t ? 'Tracked' : 'Not tracked');
         renderState('verifyState', data);
       } catch (e) {
         log('GET', '/verify', 0, null, { error: e.message });
@@ -370,14 +362,14 @@
       if (!state.fingerprint) return alert('Generate fingerprint first');
 
       try {
-        const res = await fetch(`${apiUrl}/verify?fingerprint=${state.fingerprint}`, {
+        const res = await fetch(`${apiUrl}/verify?fp=${state.fingerprint}`, {
           credentials: 'include',
         });
 
         const data = await res.json();
-        log('GET', `/verify?fingerprint=${state.fingerprint.slice(0, 8)}...`, res.status, null, data);
+        log('GET', `/verify?fp=${state.fingerprint.slice(0, 8)}...`, res.status, null, data);
 
-        setBadge('verify', data.tracked, data.tracked ? 'Tracked' : 'Not tracked');
+        setBadge('verify', data.t, data.t ? 'Tracked' : 'Not tracked');
         renderState('verifyState', data);
       } catch (e) {
         log('GET', '/verify?fingerprint=...', 0, null, { error: e.message });
@@ -392,10 +384,10 @@
       if (!state.fingerprint) return alert('Generate fingerprint first');
 
       try {
-        const res = await fetch(`${apiUrl}/lookup?fingerprint=${state.fingerprint}`, { credentials: 'include' });
+        const res = await fetch(`${apiUrl}/lookup?fp=${state.fingerprint}`, { credentials: 'include' });
         const data = await res.json();
 
-        log('GET', `/lookup?fingerprint=...`, res.status, null, data);
+        log('GET', `/lookup?fp=...`, res.status, null, data);
         setBadge('lookup', res.ok, res.ok ? 'Found' : 'Not found');
         renderState('lookupState', data);
       } catch (e) {
@@ -424,10 +416,9 @@
     };
 
     $('#clearBtn').onclick = () => {
-      state = { fingerprint: null, visitorId: null, ip: null, isNew: null };
+      state = { fingerprint: null, visitorId: null, isNew: null };
       localStorage.removeItem('qa_fingerprint');
       localStorage.removeItem('qa_visitorId');
-      localStorage.removeItem('qa_ip');
       document.cookie = '_tv=; Max-Age=0; Path=/';
       updateState();
       alert('State cleared');
